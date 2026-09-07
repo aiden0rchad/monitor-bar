@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest a useful improvement.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the task or inconvenience first. Include monitor details if the request depends on specific hardware.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Suggested change
+      description: How would you expect this to work in the app?

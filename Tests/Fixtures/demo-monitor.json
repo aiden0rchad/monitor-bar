@@ -1,0 +1,64 @@
+{
+  "display": {
+    "id": 4,
+    "name": "USB-C Display",
+    "vendor": 2533,
+    "product": 100,
+    "serial": 1234,
+    "builtIn": false,
+    "widthMM": 340,
+    "heightMM": 212.5,
+    "rotation": 0,
+    "currentModeID": 2,
+    "modes": [
+      {
+        "id": 1,
+        "width": 2560,
+        "height": 1600,
+        "pixelWidth": 2560,
+        "pixelHeight": 1600,
+        "refreshRate": 60,
+        "ioFlags": 33554435,
+        "isDesktopUsable": true
+      },
+      {
+        "id": 2,
+        "width": 1280,
+        "height": 800,
+        "pixelWidth": 2560,
+        "pixelHeight": 1600,
+        "refreshRate": 60,
+        "ioFlags": 3,
+        "isDesktopUsable": true
+      }
+    ]
+  },
+  "capabilities": "(prot(monitor)type(LCD)model(USB-C Display)vcp(10 12 62)mccs_ver(2.2))",
+  "capabilitiesStatus": "ok",
+  "features": [
+    {
+      "code": 16,
+      "current": 64,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 18,
+      "current": 50,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 98,
+      "current": 40,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    }
+  ],
+  "note": "Demo monitor data for offline preview.",
+  "scannedAt": "2025-01-01T00:00:00Z",
+  "fullScan": false
+}

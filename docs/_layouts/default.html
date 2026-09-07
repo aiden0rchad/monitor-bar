@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="description" content="{{ page.description | default: site.description | escape }}">
+    <title>{{ page.title | escape }} · {{ site.title | escape }}</title>
+    <link rel="canonical" href="{{ page.url | absolute_url }}">
+    <link rel="icon" type="image/png" href="{{ '/assets/app-icon.png' | relative_url }}">
+    <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="{{ '/' | relative_url }}" aria-label="Monitor Bar home">
+          <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="4" width="26" height="18" rx="2.5"/><path d="M16 22v5m-6 0h12"/></svg>
+          <span>Monitor Bar</span>
+        </a>
+        <a class="source-link" href="{{ site.repository_url }}">View on GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+    </header>
+    <div class="site-shell">
+      <aside class="sidebar">
+        <p class="nav-label">A little less reaching.</p>
+        <nav aria-label="Documentation">
+          <ul>
+            {% for item in site.navigation %}
+            <li><a href="{{ item.url | relative_url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.title | escape }}</a></li>
+            {% endfor %}
+          </ul>
+        </nav>
+        <div class="sidebar-note"><span class="status-dot" aria-hidden="true"></span>v{{ site.release_version }}<br>Apple Silicon · macOS 13+</div>
+      </aside>
+      <main id="main" class="content{% if page.home %} home{% endif %}" tabindex="-1">
+        <header class="page-header">
+          <p class="eyebrow">{% if page.home %}External display controls{% else %}Monitor Bar guide{% endif %}</p>
+          <h1>{{ page.title | escape }}</h1>
+          {% if page.description %}<p class="lead">{{ page.description }}</p>{% endif %}
+        </header>
+        <article>{{ content }}</article>
+        <footer class="site-footer">
+          <span>Free and open source. <a href="{{ site.repository_url }}/blob/main/LICENSE">MIT license</a>.</span>
+          <a href="{{ '/development/' | relative_url }}#privacy">Privacy</a>
+          <a href="{{ site.repository_url }}/releases">Releases</a>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+.build/
+build/
+dist/
+Diagnostics/
+.DS_Store
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+.bundle/
+vendor/bundle/

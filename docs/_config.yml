@@ -1,0 +1,29 @@
+title: Monitor Bar
+description: Native menu bar controls for external displays on Apple Silicon Macs.
+url: https://aiden0rchad.github.io
+baseurl: /monitor-bar
+repository_url: https://github.com/aiden0rchad/monitor-bar
+release_version: 0.1.0
+download_url: https://github.com/aiden0rchad/monitor-bar/releases/download/v0.1.0/Monitor-Bar-0.1.0-arm64.zip
+markdown: kramdown
+highlighter: rouge
+theme: null
+plugins: []
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+navigation:
+  - title: Overview & download
+    url: /
+  - title: Installation
+    url: /installation/
+  - title: Controls & calibration
+    url: /controls/
+  - title: Resolution & HiDPI
+    url: /hidpi/
+  - title: Troubleshooting
+    url: /troubleshooting/
+  - title: Development & privacy
+    url: /development/

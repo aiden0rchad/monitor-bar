@@ -40,6 +40,11 @@
           {% if page.description %}<p class="lead">{{ page.description }}</p>{% endif %}
         </header>
         <article>{{ content }}</article>
+        <section class="support" aria-labelledby="support-title">
+          <h2 id="support-title">Support development</h2>
+          <p>If Monitor Bar is useful to you, buying me a coffee helps support future development and testing with more monitors. Thank you!</p>
+          <a href="https://www.buymeacoffee.com/aiden0rchad"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="60" loading="lazy"></a>
+        </section>
         <footer class="site-footer">
           <span>Free and open source. <a href="{{ site.repository_url }}/blob/main/LICENSE">MIT license</a>.</span>
           <a href="{{ '/development/' | relative_url }}#privacy">Privacy</a>

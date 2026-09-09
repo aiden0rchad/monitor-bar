@@ -74,6 +74,11 @@ figcaption { margin-top: 13px; font-size: 12px; line-height: 1.5; color: var(--m
 .feature { padding: 23px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .feature h3 { margin: 0 0 10px; font-size: 17px; }
 .feature p { font-size: 14px; color: var(--muted); margin: 0; }
+.support { margin-top: 48px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.support h2 { margin: 0 0 10px; font-size: 20px; }
+.support p { max-width: 560px; font-size: 14px; color: var(--muted); }
+.support a { display: inline-block; max-width: 100%; }
+.support img { display: block; height: 60px; width: auto; object-fit: contain; }
 .site-footer { display: flex; flex-wrap: wrap; gap: 10px 20px; border-top: 1px solid var(--line); padding: 25px 0 30px; margin-top: 60px; color: var(--muted); font-size: 12px; }
 .site-footer span { margin-right: auto; }
 .site-footer a { color: inherit; }

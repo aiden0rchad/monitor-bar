@@ -128,6 +128,12 @@ DDC support varies by monitor, adapter, dock, and connection. Some screens ignor
 
 If something doesn't work, include your Mac and macOS version, monitor model if known, cable or dock, and what happened at a few specific slider positions. **Please review diagnostic files before posting them**: they can contain the display serial, raw EDID, and registry paths. [Troubleshooting](https://aiden0rchad.github.io/monitor-bar/troubleshooting/) is a good place to start.
 
+## Support development
+
+If Monitor Bar is useful to you, buying me a coffee helps support future development and testing with more monitors. Thank you!
+
+<a href="https://www.buymeacoffee.com/aiden0rchad"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="60"></a>
+
 ## Privacy and credits
 
 The app has no analytics, account system, or network service. Settings and exported reports stay on your Mac unless you share them. The documentation and downloads are hosted by GitHub; visiting those pages is separate from running the app.

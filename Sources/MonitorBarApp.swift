@@ -38,15 +38,15 @@ struct MonitorPanel: View {
     }
 
     private var mainFeatures: [VCPFeature] {
-        store.features.filter { [0x10, 0x12, 0x62].contains($0.code) && $0.isSlider }
+        store.features.filter { ([0x10, 0x12, 0x62].contains($0.code) || (store.usesSamsungControls && $0.code == 0x87)) && $0.isSlider }
     }
 
     private var otherFeatures: [VCPFeature] {
-        store.features.filter { ![0x10, 0x12, 0x62].contains($0.code) && $0.isSlider }
+        store.features.filter { feature in !mainFeatures.contains(where: { $0.code == feature.code }) && feature.isSlider }
     }
 
     private var choiceFeatures: [VCPFeature] {
-        store.features.filter { $0.isReadable && !store.allowedChoices(for: $0).isEmpty }
+        store.features.filter { !(store.usesSamsungControls && $0.code == 0x2D) && $0.isReadable && !store.allowedChoices(for: $0).isEmpty }
     }
 
     var body: some View {
@@ -61,6 +61,11 @@ struct MonitorPanel: View {
                             Divider()
                             hardwareControls
                             Divider()
+                            if store.usesSamsungControls,
+                               let pictureMode = store.features.first(where: { $0.code == 0x2D && $0.isReadable }),
+                               !store.allowedChoices(for: pictureMode).isEmpty {
+                                pictureModeControl(pictureMode)
+                            }
                             resolutionControls(display)
                         }
                         .padding(14)
@@ -128,6 +133,13 @@ struct MonitorPanel: View {
                 .disabled(store.busy || store.writing || store.pendingMode)
                 .help("Refresh display settings").accessibilityLabel("Refresh display settings")
             Menu {
+                if store.hardwareCommandsPaused {
+                    Button("Resume hardware controls", action: store.resumeHardwareCommands)
+                        .disabled(!store.canResumeHardwareCommands)
+                } else {
+                    Button("Pause hardware controls", action: store.pauseHardwareCommands)
+                }
+                Divider()
                 Toggle("Launch at login", isOn: Binding(get: { store.launchAtLogin }, set: { _ in store.toggleLaunchAtLogin() }))
                 Button("Export monitor report…", action: store.exportReport).disabled(store.busy || store.writing || store.pendingMode)
                 Button("Open macOS Displays", action: store.openDisplaySettings)
@@ -154,7 +166,8 @@ struct MonitorPanel: View {
                 } else {
                     Text(display.name).font(.system(size: 15, weight: .semibold))
                 }
-                Text("External display").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(store.usesSamsungControls ? "HDMI hardware controls" : "External display")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer()
             Label("Connected", systemImage: "checkmark.circle.fill")
@@ -171,27 +184,31 @@ struct MonitorPanel: View {
                     HStack {
                         Label(code == 0x10 ? "Brightness" : "Contrast", systemImage: code == 0x10 ? "sun.max" : "circle.lefthalf.filled")
                         Spacer()
-                        Text(store.busy ? "Reading…" : "Not supported").foregroundStyle(.secondary)
+                        Text(store.hardwareCommandsPaused ? "Paused" : store.busy ? "Reading…" : "Not supported").foregroundStyle(.secondary)
                     }.font(.system(size: 12)).frame(height: 42)
                 }
             }
+            if let sharpness = mainFeatures.first(where: { $0.code == 0x87 }) { featureSlider(sharpness) }
             if let volume = mainFeatures.first(where: { $0.code == 0x62 }) { featureSlider(volume) }
         }
-        .disabled(store.busy || store.pendingMode)
+        .disabled(store.hardwareCommandsPaused || store.busy || store.pendingMode || store.pendingValues[0x2D] != nil)
     }
 
     private var moreControls: some View {
         DisclosureGroup {
             VStack(spacing: 13) {
-                ForEach(mainFeatures.filter { [0x10, 0x12].contains($0.code) }) { feature in
-                    controlCalibration(feature)
+                if !store.usesSamsungControls {
+                    ForEach(mainFeatures.filter { [0x10, 0x12].contains($0.code) }) { feature in
+                        controlCalibration(feature)
+                    }
                 }
-                ForEach(otherFeatures) { feature in featureSlider(feature) }
-                ForEach(choiceFeatures) { feature in featurePicker(feature) }
+                if store.usesSamsungControls && !otherFeatures.isEmpty { sectionTitle("WHITE BALANCE", detail: "Monitor values") }
+                ForEach(otherFeatures) { feature in featureSlider(feature) }.disabled(store.hardwareCommandsPaused)
+                ForEach(choiceFeatures) { feature in featurePicker(feature) }.disabled(store.hardwareCommandsPaused)
                 dimmingControls
             }
             .padding(.top, 12)
-            .disabled(store.busy || store.pendingMode)
+            .disabled(store.busy || store.pendingMode || store.pendingValues[0x2D] != nil)
         } label: {
             Label("More controls", systemImage: "slider.horizontal.3").font(.system(size: 12, weight: .medium))
         }
@@ -201,7 +218,16 @@ struct MonitorPanel: View {
 
     @ViewBuilder
     private func featureSlider(_ feature: VCPFeature) -> some View {
-        if [0x10, 0x12].contains(feature.code) {
+        if store.usesSamsungControls {
+            let offset = store.osdOffset(for: feature)
+            let title = offset == 50 ? feature.name.replacingOccurrences(of: " gain", with: "") : feature.name
+            let icon = [UInt8(0x10): "sun.max", 0x12: "circle.lefthalf.filled", 0x87: "circle.lefthalf.striped.horizontal", 0x62: "speaker.wave.2"][feature.code] ?? "circle.fill"
+            ValueSlider(title: title, icon: icon,
+                        current: Double(Int(store.value(for: feature)) - offset),
+                        range: Double(-offset)...Double(Int(feature.maximum) - offset),
+                        detail: "Release to apply. HDMI value: \(feature.current) / \(feature.maximum).",
+                        commitWhileDragging: false) { store.setOSDValue(feature, value: $0) }
+        } else if [0x10, 0x12].contains(feature.code) {
             let limit = store.controlLimits[feature.code] ?? feature.maximum
             ValueSlider(title: feature.name, icon: feature.code == 0x10 ? "sun.max" : "circle.lefthalf.filled",
                         current: store.controlPercent(for: feature),
@@ -255,7 +281,7 @@ struct MonitorPanel: View {
             .padding(.top, 10)
         }
         .font(.caption)
-        .disabled(store.busy || store.writing || store.pendingMode)
+        .disabled(store.hardwareCommandsPaused || store.busy || store.writing || store.pendingMode)
     }
 
     private func featurePicker(_ feature: VCPFeature) -> some View {
@@ -294,6 +320,24 @@ struct MonitorPanel: View {
         }
     }
 
+    private func pictureModeControl(_ feature: VCPFeature) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: "photo").foregroundStyle(.secondary).frame(width: 18)
+            Text("Picture Mode").font(.system(size: 12, weight: .medium))
+            Spacer()
+            Picker("Picture Mode", selection: Binding(get: { feature.current }, set: { value in
+                if value != feature.current { store.set(feature, value: value) }
+            })) {
+                ForEach(store.allowedChoices(for: feature), id: \.0) { choice in
+                    Text(choice.1).tag(choice.0)
+                }
+            }
+            .labelsHidden().controlSize(.small).frame(maxWidth: 245, alignment: .trailing)
+        }
+        .help("Picture presets may change brightness, contrast, and color settings.")
+        .disabled(store.hardwareCommandsPaused || store.busy || store.writing || store.pendingMode)
+    }
+
     private func resolutionControls(_ display: DisplayInfo) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
@@ -312,7 +356,7 @@ struct MonitorPanel: View {
                         }
                     }
                 }
-                .labelsHidden().controlSize(.small).frame(maxWidth: 245)
+                .labelsHidden().controlSize(.small).frame(maxWidth: 245, alignment: .trailing)
                 .disabled(store.busy || store.writing || store.pendingMode)
             }
             if let mode = display.currentMode {
@@ -403,10 +447,15 @@ struct MonitorPanel: View {
                             .font(.system(size: 10, design: .monospaced))
                             .textSelection(.enabled)
                     }
-                    Button("Read all 256 control codes") { store.refresh(deep: true) }
-                        .disabled(store.busy || store.writing || store.pendingMode)
-                    Text("Read-only diagnostic scan. May take a few minutes.")
-                        .foregroundStyle(.secondary)
+                    if store.usesSamsungControls {
+                        Text("Reads seven picture and volume controls. When Picture Mode is enabled, PC/AV and Picture Mode checks bring the scan to at most nine reads.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Button("Read all 256 control codes") { store.refresh(deep: true) }
+                            .disabled(store.hardwareCommandsPaused || store.busy || store.writing || store.pendingMode)
+                        Text("Sends DDC queries. Do not scan a display that flashes or disconnects.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .font(.caption)
                 .padding(.top, 10)
@@ -462,11 +511,12 @@ private struct ValueSlider: View {
     let detail: String
     var suffix = ""
     var step: Double = 1
+    var commitWhileDragging = true
     let commit: (Double) -> Void
     @State private var value: Double
     @State private var isEditing = false
 
-    init(title: String, icon: String, current: Double, range: ClosedRange<Double>, detail: String, suffix: String = "", step: Double = 1, commit: @escaping (Double) -> Void) {
+    init(title: String, icon: String, current: Double, range: ClosedRange<Double>, detail: String, suffix: String = "", step: Double = 1, commitWhileDragging: Bool = true, commit: @escaping (Double) -> Void) {
         self.title = title
         self.icon = icon
         self.current = current
@@ -474,6 +524,7 @@ private struct ValueSlider: View {
         self.detail = detail
         self.suffix = suffix
         self.step = step
+        self.commitWhileDragging = commitWhileDragging
         self.commit = commit
         _value = State(initialValue: current)
     }
@@ -488,7 +539,7 @@ private struct ValueSlider: View {
                     .font(.system(size: 12).monospacedDigit()).foregroundStyle(.secondary)
             }
             AbsoluteSlider(value: $value, isEditing: $isEditing, range: range, step: step,
-                           label: title, detail: detail, commit: commit)
+                           label: title, detail: detail, commitWhileDragging: commitWhileDragging, commit: commit)
                 .frame(height: 16)
 
         }

@@ -18,6 +18,10 @@ import SwiftUI
         }
         _ = NSApplication.shared
         let matches = Hardware.displays().filter { $0.id == displayID }
+        guard matches.first?.isSamsungG91SD != true else {
+            print("Samsung G91SD requires the guarded monitor-probe diagnostics; this range exercise is disabled.")
+            exit(2)
+        }
         guard matches.count == 1, let display = matches.first,
               let service = Hardware.service(for: display), let handle = DDCOpen(service.id) else {
             print("The selected display has no unique DDC connection; nothing written.")

@@ -2,6 +2,9 @@ import Foundation
 
 @main struct CapabilityTests {
     static func main() {
+        precondition(Bundle.main.bundleIdentifier == "local.monitorbar.app")
+        precondition(Hardware.commandPreferences === UserDefaults.standard,
+                     "The app must use standard defaults instead of opening its own bundle ID as a suite")
         let parsed = Capabilities.features("(prot(monitor)vcp(10 12 60(0F 11) D6(01 04 05))mccs_ver(2.2))")
         assert(parsed.count == 4)
         assert(parsed[0x10] == [])
@@ -15,6 +18,6 @@ import Foundation
         assert(!VCPFeature(code: 0x04, current: 0, maximum: 1, type: 1, status: "ok").isSlider)
         assert(!VCPFeature(code: 0x10, current: 101, maximum: 100, type: 0, status: "ok").isSlider)
         assert(!VCPFeature(code: 0x10, current: 25, maximum: 100, type: 0, status: "unsupported").isSlider)
-        print("Capability parsing and writable-control checks passed")
+        print("Capability parsing, writable-control, and app preference initialization checks passed")
     }
 }

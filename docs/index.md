@@ -14,7 +14,7 @@ home: true
       <a class="button secondary" href="{{ '/installation/' | relative_url }}">Installation guide</a>
     </div>
     <p class="release-note">Apple Silicon (arm64) · macOS 13 or later<br>Ad-hoc signed. Not notarized by Apple.</p>
-    <p class="release-note">Hardware testing so far: one generic USB-C display on an M3 Max Mac running macOS 26. Other monitors and macOS versions need testing.</p>
+    <p class="release-note">Tested on an M3 Max Mac running macOS 26 with a generic USB-C display and one Samsung G91SD over HDMI. Samsung controls require individual verification and start disabled on new installations.</p>
   </div>
   <figure class="panel-preview">
     <picture>
@@ -31,14 +31,18 @@ home: true
   <section class="feature"><h3>Adjust the hardware</h3><p>Brightness, contrast, volume, color, and other supported DDC controls. The app reads settings back after sending a change.</p></section>
   <section class="feature"><h3>Find a clearer workspace</h3><p>Choose among the modes macOS reports. See HiDPI scaling, rendering pixels, refresh rate, and aspect ratio before keeping a change.</p></section>
   <section class="feature"><h3>Handle unusual ranges</h3><p>Optional per-monitor brightness and contrast calibration maps the slider onto a smaller hardware range.</p></section>
-  <section class="feature"><h3>See what the monitor reports</h3><p>Expand diagnostics for EDID information, DDC replies, capabilities, and every reported mode. Export a local report when needed.</p></section>
+  <section class="feature"><h3>See what the monitor reports</h3><p>Inspect display information, available DDC replies, and every reported mode. Export a local report when needed.</p></section>
 </div>
 
 ## What to expect
 
 The app controls external displays through macOS display APIs and DDC/CI. A USB-C connection alone does not guarantee hardware control: the monitor, cable, adapter, or dock must allow the commands through. Firmware can advertise a control and still implement it incorrectly.
 
-Brightness and contrast use the monitor's advertised range on a fresh installation. Custom calibration is **off by default**, and saved separately for each control and monitor. There is no universal setting for generic panels.
+Generic monitors use their advertised brightness and contrast ranges on a fresh installation. Custom calibration is **off by default**, and saved separately for each control and monitor. There is no universal setting for generic panels.
+
+Version **0.1.1** adds a guarded Samsung G91SD HDMI control path with seven hardware sliders and a PC Picture Mode picker. It requires a local verification record for the individual monitor; the download does not automatically enable another G91SD. [Read the Samsung limits]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) before choosing it for that setup.
+
+The gear menu can pause all hardware commands, and the pause survives a relaunch. Samsung connection or control failures also trigger that pause. Resume restarts hardware checks for ordinary monitors, or for a single, previously verified Samsung; a Samsung mixed with another external display remains blocked. Resolution selection and software dimming remain available while hardware commands are paused.
 
 Resolution changes have a 15-second preview. Click **Keep** to retain the mode for your current login session, or let the app request the previous mode. Read more about [HiDPI and aspect ratio]({{ '/hidpi/' | relative_url }}).
 

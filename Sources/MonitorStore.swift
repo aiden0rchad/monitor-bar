@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
     @Published var features: [VCPFeature] = []
     @Published var capabilities = ""
     @Published var busy = false
+    @Published private(set) var hardwareCommandsPaused = false
     @Published private(set) var writing = false
     @Published private(set) var pendingValues: [UInt8: UInt16] = [:]
     @Published private(set) var controlLimits: [UInt8: UInt16] = [:]
@@ -21,6 +22,12 @@ import UniformTypeIdentifiers
     @Published var edidSummary = ""
     @Published var ddcAvailable = false
     var selected: DisplayInfo? { displays.first { $0.id == selectedID } }
+    var usesSamsungControls: Bool { selected?.isSamsungG91SD == true }
+    var canResumeHardwareCommands: Bool {
+        hardwareCommandsPaused && !busy && !writing && !pendingMode && !displays.isEmpty
+            && (displays.allSatisfy { !$0.isSamsungG91SD }
+                || (displays.count == 1 && selected.map { Hardware.canUseSamsungControls($0, preferences: preferences) } == true))
+    }
     func value(for feature: VCPFeature) -> UInt16 { pendingValues[feature.code] ?? feature.current }
     var statusText: String { message == probe?.note && ddcAvailable ? "Settings up to date" : message }
     private var panelPixels: (Int, Int)? {
@@ -75,10 +82,11 @@ import UniformTypeIdentifiers
     private var writeTask: DispatchWorkItem?
     private var writeInFlight = false
     private var writeGeneration = 0
+    private var resumeGeneration = 0
 
     init(snapshot: MonitorProbe? = nil,
          writer: @escaping (DisplayInfo, VCPFeature, UInt16) -> (VCPFeature?, String) = Hardware.write,
-         preferences: UserDefaults = .standard) {
+         preferences: UserDefaults = Hardware.commandPreferences) {
         self.writer = writer
         self.preferences = preferences
         if let snapshot {
@@ -123,6 +131,7 @@ import UniformTypeIdentifiers
         guard !pendingMode else { return }
         displays = Hardware.displays()
         if !displays.contains(where: { $0.id == selectedID }) { selectedID = displays.first?.id ?? 0 }
+        guard !stopHardwareIfPaused() else { return }
         guard let display = selected else {
             applyProbe(nil)
             message = "Connect an external monitor to get started."
@@ -150,6 +159,8 @@ import UniformTypeIdentifiers
     }
 
     private func applyProbe(_ result: MonitorProbe?) {
+        hardwareCommandsPaused = Hardware.commandsPaused(in: preferences)
+        let result = hardwareCommandsPaused ? nil : result
         if result == nil {
             writeGeneration += 1
             writeTask?.cancel(); writeTask = nil
@@ -161,7 +172,7 @@ import UniformTypeIdentifiers
         features = result?.features ?? []
         controlLimits.removeAll()
         if let result {
-            for feature in features where feature.isSlider {
+            for feature in features where feature.isSlider && !result.display.isSamsungG91SD {
                 guard let key = Self.calibrationKeys[feature.code],
                       let stored = preferences.object(forKey: "\(key).\(result.display.identity)") as? Int,
                       (1...Int(feature.maximum)).contains(stored) else { continue }
@@ -172,7 +183,46 @@ import UniformTypeIdentifiers
         edidSummary = result == nil ? "" : result?.edid?.summary ?? "EDID unavailable."
         ddcAvailable = features.contains(where: \.isReadable)
         lastScan = result?.scannedAt
-        message = result?.note ?? ""
+        message = hardwareCommandsPaused ? Hardware.pauseReason(in: preferences) ?? Hardware.pauseMessage : result?.note ?? ""
+    }
+
+    func pauseHardwareCommands() {
+        resumeGeneration += 1
+        preferences.removeObject(forKey: "hardwarePauseReason")
+        preferences.set(true, forKey: Hardware.pauseKey)
+        preferences.synchronize()
+        _ = stopHardwareIfPaused()
+    }
+
+    func resumeHardwareCommands() {
+        guard canResumeHardwareCommands else { return }
+        busy = true
+        message = "Resuming hardware controls…"
+        resumeGeneration += 1
+        let generation = resumeGeneration
+        // Keep the pause set until any older hardware operation has finished.
+        Hardware.queue.async {
+            Hardware.resetSamsungSession()
+            DispatchQueue.main.async {
+                guard self.resumeGeneration == generation else { return }
+                self.busy = false
+                guard self.canResumeHardwareCommands else { self.message = Hardware.pauseMessage; return }
+                self.preferences.removeObject(forKey: "hardwarePauseReason")
+                self.preferences.removeObject(forKey: Hardware.pauseKey)
+                self.preferences.set(false, forKey: Hardware.pauseKey)
+                self.preferences.synchronize()
+                self.hardwareCommandsPaused = false
+                self.refresh()
+            }
+        }
+    }
+
+    private func stopHardwareIfPaused() -> Bool {
+        guard Hardware.commandsPaused(in: preferences) else { return false }
+        refreshRequested = false
+        busy = false
+        applyProbe(nil)
+        return true
     }
 
     private func finishOperation() {
@@ -182,6 +232,11 @@ import UniformTypeIdentifiers
 
     func allowedChoices(for feature: VCPFeature) -> [(UInt16, String)] {
         guard feature.isReadable else { return [] }
+        if feature.code == 0x2D {
+            guard let display = selected, Hardware.canUseSamsungPictureMode(display, preferences: preferences),
+                  feature.type == 0, feature.maximum == 10, feature.current < 10 else { return [] }
+            return Hardware.samsungPictureModeChoices
+        }
         let advertised = Capabilities.features(capabilities)[feature.code] ?? []
         return feature.choices.filter { advertised.contains($0.0) }
     }
@@ -190,6 +245,17 @@ import UniformTypeIdentifiers
         let maximum = controlLimits[feature.code] ?? feature.maximum
         guard maximum > 0 else { return 0 }
         return min(100, Double(value(for: feature)) * 100 / Double(maximum))
+    }
+
+    func osdOffset(for feature: VCPFeature) -> Int {
+        usesSamsungControls && feature.maximum == 100 && [0x16, 0x18, 0x1A].contains(feature.code) ? 50 : 0
+    }
+
+    func setOSDValue(_ feature: VCPFeature, value: Double) {
+        guard value.isFinite else { return }
+        let raw = value + Double(osdOffset(for: feature))
+        guard raw >= 0, raw <= Double(feature.maximum) else { return }
+        set(feature, value: UInt16(raw.rounded()))
     }
 
     func setPercent(_ feature: VCPFeature, percent: Double) {
@@ -201,7 +267,7 @@ import UniformTypeIdentifiers
     }
 
     func setControlLimit(_ feature: VCPFeature, limit: UInt16?) {
-        guard !busy, !writing, !pendingMode, let display = selected,
+        guard !usesSamsungControls, !busy, !writing, !pendingMode, let display = selected,
               let prefix = Self.calibrationKeys[feature.code],
               let live = features.first(where: { $0.code == feature.code && $0.isSlider }) else { return }
         if let limit, !(1...live.maximum).contains(limit) { return }
@@ -213,8 +279,18 @@ import UniformTypeIdentifiers
     }
 
     func set(_ feature: VCPFeature, value: UInt16) {
+        guard !stopHardwareIfPaused() else { return }
         guard !busy, !pendingMode, selected != nil,
               let live = features.first(where: { $0.code == feature.code }), live.isReadable else { return }
+        if let display = selected, display.isSamsungG91SD {
+            guard pendingValues[0x2D] == nil, live.code != 0x2D || !writing else { return }
+            guard Hardware.canUseSamsungControls(display, preferences: preferences),
+                  Hardware.samsungControlCodes.contains(live.code)
+                    || (live.code == 0x2D && Hardware.canUseSamsungPictureMode(display, preferences: preferences)) else {
+                message = "This Samsung control has not been enabled for this monitor."
+                return
+            }
+        }
         guard (live.isSlider && value <= live.maximum) || allowedChoices(for: live).contains(where: { $0.0 == value }) else {
             message = "That setting is not a supported writable control."
             return
@@ -227,7 +303,11 @@ import UniformTypeIdentifiers
         guard pendingValues[live.code] != nil || value != live.current else { return }
         pendingValues[live.code] = value
         writing = true
-        message = controlLimits[live.code] != nil ? "Applying \(live.name.lowercased())…" : "Applying \(live.name): \(value)…"
+        if live.code == 0x2D, let name = allowedChoices(for: live).first(where: { $0.0 == value })?.1 {
+            message = "Applying \(name)…"
+        } else {
+            message = controlLimits[live.code] != nil ? "Applying \(live.name.lowercased())…" : "Applying \(live.name): \(value)…"
+        }
         scheduleWrite()
     }
 
@@ -240,6 +320,7 @@ import UniformTypeIdentifiers
 
     private func flushWrite() {
         writeTask = nil
+        guard !stopHardwareIfPaused() else { return }
         guard let display = selected, let code = pendingValues.keys.sorted().first,
               let value = pendingValues[code], let live = features.first(where: { $0.code == code }) else {
             pendingValues.removeAll()
@@ -250,9 +331,13 @@ import UniformTypeIdentifiers
         writeInFlight = true
         let generation = writeGeneration
         let writer = self.writer
+        // UserDefaults is thread-safe; recheck the pause when queued work begins.
+        nonisolated(unsafe) let commandPreferences = preferences
         Hardware.queue.async {
-            let (readback, status) = writer(display, live, value)
+            let (readback, status) = Hardware.commandsPaused(in: commandPreferences)
+                ? (nil, Hardware.pauseMessage) : writer(display, live, value)
             DispatchQueue.main.async {
+                guard !self.stopHardwareIfPaused() else { return }
                 guard self.writeGeneration == generation,
                       self.selected?.id == display.id, self.selected?.identity == display.identity else { return }
                 self.writeInFlight = false
@@ -265,6 +350,8 @@ import UniformTypeIdentifiers
                     self.message = self.controlLimits[code] != nil && readback?.current == value
                         ? "\(live.name) command confirmed." : status
                 }
+                // A preset can replace several picture values. Read them before accepting another write.
+                if display.isSamsungG91SD && code == 0x2D { self.refreshRequested = true }
                 if self.pendingValues.isEmpty {
                     self.writing = false
                     self.finishOperation()

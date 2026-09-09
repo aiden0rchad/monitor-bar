@@ -49,6 +49,7 @@ struct DisplayInfo: Identifiable, Codable {
     let currentModeID: Int32
     let modes: [DisplayModeInfo]
     var identity: String { String(format: "%04X:%04X · Serial %u", vendor, product, serial) }
+    var isSamsungG91SD: Bool { !builtIn && vendor == 0x4C2D && product == 0x778D }
     var currentMode: DisplayModeInfo? { modes.first { $0.id == currentModeID } }
     var selectableModes: [DisplayModeInfo] {
         var seen = Set<String>()
@@ -84,7 +85,7 @@ struct VCPFeature: Identifiable, Codable {
     static let names: [UInt8: String] = [
         0x02:"New control value", 0x04:"Restore defaults", 0x05:"Restore brightness / contrast", 0x06:"Restore geometry", 0x08:"Restore color defaults",
         0x0B:"Color temperature increment", 0x0C:"Color temperature", 0x10:"Brightness", 0x12:"Contrast", 0x14:"Color preset",
-        0x16:"Red gain", 0x18:"Green gain", 0x1A:"Blue gain", 0x1E:"Auto setup", 0x20:"Horizontal position", 0x30:"Vertical position", 0x52:"Active control", 0x60:"Input source", 0x62:"Volume",
+        0x16:"Red gain", 0x18:"Green gain", 0x1A:"Blue gain", 0x1E:"Auto setup", 0x20:"Horizontal position", 0x2D:"Picture Mode", 0x30:"Vertical position", 0x52:"Active control", 0x60:"Input source", 0x62:"Volume",
         0x6C:"Red black level", 0x6E:"Green black level", 0x70:"Blue black level", 0x87:"Sharpness", 0x8D:"Audio mute",
         0xAC:"Horizontal frequency", 0xAE:"Vertical frequency", 0xB2:"Subpixel layout", 0xB6:"Display technology",
         0xC0:"Usage time", 0xC6:"Application enable", 0xC8:"Controller type", 0xC9:"Firmware version", 0xCA:"OSD control",

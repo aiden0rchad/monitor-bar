@@ -26,6 +26,10 @@ struct RenderPanel {
         let suite = "MonitorBar.Preview.\(UUID().uuidString)"
         let preferences = UserDefaults(suiteName: suite)!
         defer { preferences.removePersistentDomain(forName: suite) }
+        if snapshot.display.isSamsungG91SD {
+            preferences.set(true, forKey: Hardware.samsungEnableKey(snapshot.display))
+            preferences.set(true, forKey: Hardware.samsungPictureModeEnableKey(snapshot.display))
+        }
         let size = NSSize(width: 420, height: 560)
         for (name, scheme, appearance) in [
             ("light", ColorScheme.light, NSAppearance.Name.aqua),

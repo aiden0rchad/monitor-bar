@@ -15,7 +15,7 @@ cd monitor-bar
 open "build/Monitor Bar.app"
 ```
 
-The build creates an ad-hoc-signed app and a command-line probe. It does not notarize the app or register a Developer ID signature. Public binaries target arm64 and macOS 13; runtime testing so far is limited to an M3 Max Mac on macOS 26 with a generic USB-C panel.
+The build creates an ad-hoc-signed app and a command-line probe. It does not notarize the app or register a Developer ID signature. Public binaries target arm64 and macOS 13; runtime testing so far is limited to an M3 Max Mac on macOS 26 with a generic USB-C panel and a Samsung Odyssey G91SD over HDMI.
 
 ## Source layout
 
@@ -35,11 +35,13 @@ The build creates an ad-hoc-signed app and a command-line probe. It does not not
 ./scripts/test.sh
 ```
 
-The automated suite checks DDC response framing, checksums and statuses; EDID parsing; capability parsing; display-mode filtering; writable-control restrictions; absolute slider actions; custom range mapping; rapid changes; and delayed or failed readbacks. These tests do not change hardware settings.
+The automated suite checks DDC response framing, checksums and statuses; EDID parsing; capability parsing; display-mode filtering; writable-control restrictions; absolute slider actions; custom range mapping; rapid changes; and delayed or failed readbacks. Samsung tests also cover connection identity changes, strict per-unit opt-ins, PC/AV gating, categorical Picture Mode values, and request limits. These tests do not change hardware settings.
 
 Hardware integration checks are separate and opt-in. They require an explicitly selected display and a saved custom range. Numeric readback verifies command mapping, not measured luminance or contrast.
 
 ## Inspect a connected display
+
+Use a DDC probe only on a stable connection. If hardware commands have caused flashing or disconnection, keep hardware control paused and use the mode-only report below. GetVCP queries send I2C request packets; they are not passive inspection.
 
 Build first, then quit Monitor Bar and any other DDC utility before a full probe:
 
@@ -48,17 +50,41 @@ mkdir -p Diagnostics
 .build/monitor-probe --full > Diagnostics/monitor-full.json
 ```
 
-This reads all 256 GetVCP feature addresses without setting controls. The default probe reads advertised and common controls. A mode-only report uses CoreGraphics without DDC traffic and can run while the app is open:
+For other monitors, this reads all 256 GetVCP feature addresses without setting controls; the default probe reads advertised and common controls. The Samsung G91SD always uses the bounded path below, including with `--full`. A mode-only report uses CoreGraphics without DDC traffic and can run while the app is open:
 
 ```sh
 .build/monitor-probe --modes > Diagnostics/display-modes.json
 ```
 
+For a controlled single request, `--read-once DISPLAY_ID REGISTRY_ID HEX_CODE PROFILE` requires exactly one external display, an explicitly matched CoreGraphics display ID and external IORegistry service ID, a hexadecimal VCP code, and a profile from 0–3. IDs and profile are decimal. Match the service using cached IORegistry data first. This path does not enumerate DDC services or fetch EDID/capabilities; it sends at most one GetVCP request and reads at most one reply, with no retries. Profile 0 uses the standard request checksum and reply offset 0. The command honors the persistent hardware pause and never clears it. A returned `ok` validates the protocol reply; it does not establish that a value is within range or that writing it is safe. Invalid or conflicting command-line options exit without starting a probe.
+
+`--step-brightness DISPLAY_ID REGISTRY_ID EXPECTED NEW` performs a guarded hardware test using decimal raw brightness values exactly one step apart. It first reads brightness once with profile 0. It sends one SetVCP only if the reply is valid, continuous, within range, matches `EXPECTED`, and allows `NEW`. It never retries or restores a value automatically. `writeStatus: "ok"` only means the transport accepted the write; `writeConfirmed` remains false. A separate readback and physical OSD check are needed to confirm the result. The same display-selection and persistent-pause rules apply. Close other monitor-control apps and supervise the connection before using this command.
+
+`--set-brightness DISPLAY_ID REGISTRY_ID EXPECTED NEW` uses the same guarded read and single write, but allows a requested target anywhere within the monitor's reported range. Values are raw OSD units, not percentages.
+
+`--step-contrast DISPLAY_ID REGISTRY_ID EXPECTED NEW` applies the adjacent-value test to contrast (VCP `0x12`, profile 0), with the same preconditions and persistent pause as `--step-brightness`. It sends one GetVCP request and at most one SetVCP, with no retries. Values are raw OSD units. Confirm each change separately before another test.
+
+`--step-control DISPLAY_ID REGISTRY_ID HEX_CODE EXPECTED NEW` uses those same guards for hexadecimal codes `10`, `12`, `16`, `18`, `1A`, `62`, `87`, or `8A`. Values are decimal raw units exactly one step apart. It checks the selected control with profile 0 and requires a valid continuous range; inclusion in the allowlist does not establish monitor support. Save each original value before testing, and stop the batch on any failure or connection change.
+
 Keep reports local unless you have reviewed and redacted identifying data. Generated diagnostics and build artifacts are excluded from version control.
+
+## Samsung HDMI hardware path
+
+Samsung G91SD controls require a verified per-unit opt-in, the Samsung as the only external display, and a uniquely matching cached HDMI connection. Discovery reads cached EDID and registry properties, without requesting EDID or capabilities from the monitor. The app checks the proxy, HDMI port, connection counter, UUID, and EDID around every I2C operation. A changed connection or failed confirmation persists a global hardware pause. Explicit resume acknowledges a new connection before rescanning.
+
+The base scan reads only brightness, contrast, sharpness, RGB, and volume: seven profile-0 GetVCP exchanges without retries. Ordinary writes pre-read the control, reject stale values, send at most one SetVCP, and verify once.
+
+Picture Mode has a separate strict boolean opt-in, `samsungPictureModeEnabled.<display.identity>`, in addition to the base hardware opt-in. It defaults off. An opted-in scan reads PC/AV (`0xE4`) after the seven controls, then Picture Mode (`0x2D`) only for a valid PC response. The scan therefore uses at most nine reads and exposes at most eight controls. An AV or unsupported response disables Picture Mode while retaining the base controls; transport or malformed-response failures pause all hardware controls.
+
+Samsung Display Manager's PC Picture Mode map is: 0 Entertain, 1 Graphic, 2 Eco, 3 Game Standard, 4 RPG, 5 RTS, 6 FPS, 7 Sports, 8 Original, and 9 Custom. The mode is categorical. A reported maximum of 10 does not make PC value 10 valid. The app requires type 0, maximum 10, and a current value in this PC map. The PC/AV maximum is not interpreted as a continuous range.
+
+A Picture Mode write checks PC input again, reads the current mode and rejects stale state, sends at most one `0x2D` SetVCP, then reads `0x2D` once to confirm. No automatic retry or restoration occurs. The feature remains gated per unit; the map recovered from Samsung's app does not establish that every mode is available in every monitor configuration. Picture presets may also change brightness, contrast, and color settings.
 
 ## Opt-in hardware range check
 
 `Tests/DDCControlRange.swift` exercises one real brightness or contrast control through the native slider action and app write queue. It sends targets of 0, 25, 50, 75, and 100% within the saved custom range, verifies reported raw values, and attempts to restore the starting raw value. **This test changes the selected monitor's hardware settings.**
+
+This range-exercise diagnostic rejects Samsung G91SD monitors; it does not use their guarded production control path.
 
 First save a suitable custom range in Monitor Bar, then quit the app and other DDC utilities. Build the probe and test executable:
 

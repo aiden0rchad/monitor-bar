@@ -4,7 +4,9 @@ The controls on the back of a monitor are rarely its best feature. Monitor Bar p
 
 It's a small, free macOS app built with SwiftUI and AppKit. No account or subscription. The source is available under the [MIT license](LICENSE).
 
-**[Download v0.1.0](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.0)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**
+**[Download v0.1.1](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.1)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**
+
+Samsung G91SD hardware controls require individual verification and start disabled on a new installation. [See the current limits below](#samsung-odyssey-g91sd-over-hdmi).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/monitor-panel-dark.png">
@@ -15,13 +17,13 @@ It's a small, free macOS app built with SwiftUI and AppKit. No account or subscr
 
 ## Install
 
-1. Download **Monitor-Bar-0.1.0-arm64.zip** from the [release page](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.0).
+1. Download **Monitor-Bar-0.1.1-arm64.zip** from the [release page](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.1).
 2. Unzip it and move **Monitor Bar.app** to Applications.
 3. Open it, then click the monitor icon in the menu bar. There isn't a Dock window to look for.
 
 You'll need an **Apple Silicon Mac running macOS 13 or later**. Hardware controls also need a monitor and cable connection that pass DDC/CI commands. A USB-C connector by itself doesn't guarantee support.
 
-This first release is ad-hoc signed, **not notarized by Apple**. If macOS blocks it, attempt to open it once, then use **System Settings → Privacy & Security → Open Anyway** if you choose to trust it. Apple's [instructions for opening downloaded apps](https://support.apple.com/en-us/102445) explain the prompts. You can also build from source below.
+This release is ad-hoc signed, **not notarized by Apple**. If macOS blocks it, attempt to open it once, then use **System Settings → Privacy & Security → Open Anyway** if you choose to trust it. Apple's [instructions for opening downloaded apps](https://support.apple.com/en-us/102445) explain the prompts. You can also build from source below.
 
 The release includes `SHA256SUMS` so you can check the download:
 
@@ -40,9 +42,33 @@ Run that from the folder containing both the ZIP and `SHA256SUMS`.
 - Exposes supported color settings, inputs, and standby under **More controls**.
 - Provides software dimming when you want to darken the image further.
 - Shows EDID and DDC details, and exports a local diagnostic report.
+- Pauses all hardware commands when requested, keeping that pause across launches.
 - Can launch at login. Use the gear menu to turn that on.
 
-Unsupported controls stay unavailable. The app doesn't invent settings from the monitor's marketing specs.
+Controls with missing or unusable replies stay unavailable. A valid reply is still only a candidate for control: it does not guarantee that the monitor will handle adjustments safely. If the screen flashes or disconnects, quit the app and use the monitor's physical controls.
+
+## Samsung Odyssey G91SD over HDMI
+
+Version **0.1.1** adds seven hardware sliders for an individually verified G91SD: brightness, contrast, sharpness, red gain, green gain, blue gain, and volume. It also offers a **Picture Mode** picker for a separately verified unit in PC mode. Testing used firmware 1003.2 and direct HDMI on an M3 Max Mac, with changes checked against the monitor's own menu. This is one tested setup, not a compatibility claim for every G91SD.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/samsung-panel-dark.png">
+  <img src="docs/assets/samsung-panel-light.png" alt="Example Samsung panel with brightness, contrast, sharpness, volume, Picture Mode, and resolution controls" width="420">
+</picture>
+
+*Offline preview using sample Samsung data. Hardware controls require local verification.*
+
+Enablement is saved locally for the individual monitor after verification. A matching model name alone does not enable hardware control, and no monitor's private identity is bundled with the app. The Samsung must be the Mac's only external display; the built-in screen can stay on. Connecting another external display disables hardware discovery for both. **Resume hardware controls** explicitly accepts the current HDMI connection for a previously verified Samsung; reconnection alone does not resume it.
+
+There is no automatic verification or first-use enable button in this release. On a new installation, the Samsung's hardware controls remain unavailable while macOS resolution selection still works. To help test another unit, [open a compatibility report](https://github.com/aiden0rchad/monitor-bar/issues/new/choose) with the model, firmware, Mac, and connection details.
+
+Samsung sliders apply when released. Before writing, the app reads the current value and refuses the change if it no longer matches the slider's starting value. It then sends one write and one readback, using the verified DDC packet format without retries. A refresh reads at most nine values: the seven slider controls, PC/AV mode, and Picture Mode. The app matches the HDMI service using cached macOS identity information, without a capabilities request or deep scan. A transport failure or connection change pauses further hardware commands until an explicit resume.
+
+The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, and **0–100** for volume, following the monitor's reported ranges. RGB gains under **More controls** subtract 50 for display when the reported maximum is 100: a raw reply of 51 was confirmed as **+1**. That observation is not a calibration of the full color range. The OSD's separate **Color** setting is not an RGB gain control.
+
+Picture Mode changes the monitor's hardware preset and can also change brightness, contrast, and color settings. The app refreshes its sliders afterward. The ten PC choices come from static analysis of Samsung's official Display Manager app and comparison with the OSD; direct HDMI tests have confirmed **Eco** and **Original**. See the [mode table and limits](https://aiden0rchad.github.io/monitor-bar/troubleshooting/#samsung-picture-mode).
+
+If brightness is unavailable in the monitor's own menu, check **Save Power** first. Turning it off restored brightness on the tested unit. Firmware 1003.2 did not establish a general fix for HDMI disconnections. See [Samsung troubleshooting](https://aiden0rchad.github.io/monitor-bar/troubleshooting/#samsung-g91sd-hardware-controls).
 
 ## A note about brightness and contrast
 
@@ -52,7 +78,7 @@ The working brightness range on that screen was roughly **0–25**. Calibration 
 
 Open **More controls → Brightness calibration** or **Contrast calibration**, enable **Use custom range**, and set the maximum hardware value. A maximum of 25 gives 26 hardware levels, shown in roughly 4% steps. If the control starts reversing near the top, lower the endpoint a little.
 
-**Fresh installs use the monitor's advertised range.** The value 25 is an example from one display, not a preset applied to every monitor. Calibration is saved separately for each control and monitor. [The controls guide](https://aiden0rchad.github.io/monitor-bar/controls/) covers the details.
+**On other monitors, fresh installs use the advertised range.** The value 25 is an example from one display, not a preset applied to every monitor. Calibration is saved separately for each control and monitor. The Samsung controls above use OSD units and hide these custom-range controls. [The controls guide](https://aiden0rchad.github.io/monitor-bar/controls/) covers the details.
 
 ## HiDPI and blurry text
 
@@ -91,7 +117,7 @@ The [development guide](https://aiden0rchad.github.io/monitor-bar/development/) 
 
 ## Before reporting a problem
 
-v0.1.0 is an early release. Hardware testing has been on an M3 Max Mac with a generic USB-C monitor, not a broad collection of displays. The app targets macOS 13 and later; the local hardware checks were run on macOS 26. An Intel build is not included.
+Monitor Bar is still an early project. Hardware testing covers an M3 Max Mac with a generic USB-C monitor and the Samsung HDMI setup described above. The app targets macOS 13 and later; the local hardware checks were run on macOS 26. An Intel build is not included.
 
 DDC support varies by monitor, adapter, dock, and connection. Some screens ignore commands in certain picture modes. Others report values that don't match what you see. The app uses private `IOAVService` APIs for Apple Silicon DDC access, so a future macOS update may require changes.
 

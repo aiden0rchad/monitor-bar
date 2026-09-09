@@ -9,13 +9,14 @@ struct AbsoluteSlider: NSViewRepresentable {
     let step: Double
     let label: String
     let detail: String
+    var commitWhileDragging = true
     let commit: (Double) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> TrackingSlider {
         let slider = TrackingSlider()
-        slider.isContinuous = true
+        slider.isContinuous = commitWhileDragging
         slider.controlSize = .small
         slider.target = context.coordinator
         slider.action = #selector(Coordinator.changed(_:))
@@ -27,6 +28,7 @@ struct AbsoluteSlider: NSViewRepresentable {
     func updateNSView(_ slider: TrackingSlider, context: Context) {
         context.coordinator.parent = self
         slider.isEnabled = isEnabled
+        slider.isContinuous = commitWhileDragging
         slider.setAccessibilityLabel(label)
         slider.toolTip = detail
         // AppKit owns the thumb while tracking, even when readbacks redraw SwiftUI.

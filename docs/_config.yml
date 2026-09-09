@@ -3,8 +3,8 @@ description: Native menu bar controls for external displays on Apple Silicon Mac
 url: https://aiden0rchad.github.io
 baseurl: /monitor-bar
 repository_url: https://github.com/aiden0rchad/monitor-bar
-release_version: 0.1.0
-download_url: https://github.com/aiden0rchad/monitor-bar/releases/download/v0.1.0/Monitor-Bar-0.1.0-arm64.zip
+release_version: 0.1.1
+download_url: https://github.com/aiden0rchad/monitor-bar/releases/download/v0.1.1/Monitor-Bar-0.1.1-arm64.zip
 markdown: kramdown
 highlighter: rouge
 theme: null

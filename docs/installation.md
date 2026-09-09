@@ -7,7 +7,7 @@ permalink: /installation/
 ## Requirements
 
 - An **Apple Silicon Mac**. The release contains an arm64 executable; Intel Macs are not supported.
-- **macOS 13 or later**. Runtime hardware testing has been limited to an M3 Max Mac on macOS 26 with one generic USB-C monitor. The minimum deployment target is not a claim that every older macOS release has been tested.
+- **macOS 13 or later**. Runtime hardware testing has been limited to an M3 Max Mac on macOS 26 with a generic USB-C monitor and a Samsung G91SD over HDMI. The minimum deployment target is not a claim that every older macOS release has been tested.
 - An external display. Hardware sliders require a working DDC/CI path; resolution selection uses the modes macOS provides.
 
 The app controls external monitors. It does not provide built-in Mac display brightness control.
@@ -20,6 +20,12 @@ The app controls external monitors. It does not provide built-in Mac display bri
 4. Open the app, then click its monitor icon in the menu bar.
 
 The app has no Dock icon and no ordinary main window. Its controls open from the menu bar icon. If another copy is already running, quit it before opening a replacement.
+
+### Samsung G91SD on a new installation
+
+The Samsung control code is included in v0.1.1, but hardware controls start disabled without a local verification record for the individual monitor. Matching the model is not enough, and the release does not include an automatic verification or first-use enable button. Picture Mode needs its own verification and the Mac input set to PC mode.
+
+Resolution selection remains available through macOS. If you want to help verify another Samsung unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with its model, firmware, Mac, and HDMI connection details. See [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) for the tested setup and current limits.
 
 ## First-open security prompt
 
@@ -37,7 +43,7 @@ The gear menu includes **Launch at login**. If macOS asks for approval, open **S
 
 ## Update
 
-Updates are manual. Check [GitHub Releases]({{ site.repository_url }}/releases), quit Monitor Bar, and replace the app in Applications with the new copy. There is no in-app update checker. Saved custom ranges are local preferences and are not shipped inside the download.
+Updates are manual. Check [GitHub Releases]({{ site.repository_url }}/releases), quit Monitor Bar, and replace the app in Applications with the new copy. There is no in-app update checker. Custom ranges, hardware pauses, and per-unit Samsung verification stay in local preferences; they are not shipped inside the download. Updating does not clear a hardware pause or enable an unverified monitor.
 
 ## Quit or remove
 

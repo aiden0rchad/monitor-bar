@@ -19,7 +19,7 @@ A working picture does not guarantee a working DDC/CI connection. Try these chec
 1. If the monitor has a DDC/CI option in its own menu, enable it.
 2. Quit other display-control utilities so only one app is sending DDC commands.
 3. Try a direct connection instead of a dock or adapter, if possible.
-4. Click refresh. Open **Show details** to inspect reply statuses.
+4. Click refresh. Open **Monitor Settings → Information** to inspect reply statuses.
 
 Firmware may omit a control, report an invalid range, or fail to answer. Monitor Bar cannot safely turn every readable address into a writable control. Software dimming and resolution selection can still be available when hardware control is unavailable.
 
@@ -27,7 +27,7 @@ Firmware may omit a control, report an invalid range, or fail to answer. Monitor
 
 Stop using hardware controls and quit Monitor Bar. A successful query or numeric readback does not establish that further commands are safe. Do not run a full DDC scan against a connection that is already resetting: queries also send packets to the monitor.
 
-Version **0.1.1** adds **Gear menu → Pause hardware controls**. This pause is saved across launches and blocks DDC discovery, reads, writes, and retries for **all monitors**. It does not automatically resume after reconnection. **Resume hardware controls** is available for connected monitors other than the Samsung, or for a single, previously verified Samsung G91SD. Mixed Samsung/external-display setups and unverified Samsung units remain blocked. Version 0.1.0 does not have these protections; leave that version closed on an affected setup.
+Use **Monitor Settings → App → Pause hardware controls**. This pause is saved across launches and blocks DDC discovery, reads, writes, and retries for **all monitors**. It does not automatically resume after reconnection. **Resume hardware controls** is available for connected monitors other than the Samsung, or for a single, previously verified Samsung G91SD. Mixed Samsung/external-display setups and unverified Samsung units remain blocked. The pause was introduced in v0.1.1; version 0.1.0 does not have these protections and should stay closed on an affected setup.
 
 Use the monitor's physical controls for hardware brightness and contrast. Software dimming changes only the displayed image. If the connection or charging still drops with display-control apps closed, investigate the cable, monitor, and Mac connection separately; another brightness test cannot establish the cause safely.
 
@@ -37,15 +37,21 @@ Check the monitor's power-saving and picture settings first. On the tested Samsu
 
 ## Samsung G91SD hardware controls
 
-Version **0.1.1** includes Samsung support with individual verification required. Seven slider controls have been checked on one G91SD running firmware 1003.2 over direct HDMI: brightness, contrast, sharpness, red gain, green gain, blue gain, and volume. Picture Mode is enabled separately after verification, as described below.
+Version **0.1.2** includes Samsung support with individual verification required. Brightness, contrast, sharpness, RGB gains, and volume have been checked on one G91SD running firmware 1003.2 over direct HDMI. Picture Mode, Color Tone, and Black Equalizer require separate verification. The new Color Tone test covered **Warm 1 ↔ Warm 2**; Black Equalizer covered **5 ↔ 6**. Both were physically confirmed and restored, with other reported picture values unchanged. These small checks do not establish every preset or the full slider range.
 
 The app enables this path only for an individually verified monitor saved in local preferences. Another G91SD does not inherit that verification. If the app has no verification record for your unit, hardware controls remain unavailable until the connection and individual controls have been checked. The Samsung must also be the Mac's only external display; the built-in screen can remain active. A Samsung connected alongside another external display disables hardware discovery for both, avoiding the generic EDID scan.
 
-There is no automatic verification or first-use enable button in v0.1.1. Resolution selection can still use the modes macOS provides. To help verify another unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with the monitor model, firmware, Mac, and connection details. Do not copy another unit's verification preferences as a substitute for testing.
+There is no automatic verification or first-use enable button in v0.1.2. Resolution selection can still use the modes macOS provides. To help verify another unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with the monitor model, firmware, Mac, and connection details. Do not copy another unit's verification preferences as a substitute for testing.
 
-For this path, Monitor Bar matches the HDMI service using cached macOS identity information. A refresh makes at most nine reads: the seven slider controls plus PC/AV mode and Picture Mode when enabled. A slider commits when released: the app first checks that the current value still matches its starting value, then sends one write and one readback. A stale starting value is refused. Each operation uses one attempt with the verified packet format, without a capabilities request, alternate-format retries, or a deep scan. A transport failure or connection change pauses hardware commands. **Resume hardware controls** explicitly acknowledges the current HDMI connection; it is available only for a previously verified unit.
+For this path, Monitor Bar matches the HDMI service using cached macOS identity information. A refresh makes at most 12 reads with all verified controls enabled: the seven original sliders, PC/AV mode, Picture Mode, Eye Saver state, Color Tone, and Black Equalizer. Controls known to be locked are skipped. A slider commits when released: the app first checks that the current value still matches its starting value, then sends one write and one readback. A stale starting value is refused. Each operation uses one attempt with the verified packet format, without a capabilities request, alternate-format retries, or a deep scan. A transport failure or connection change pauses hardware commands. **Resume hardware controls** explicitly acknowledges the current HDMI connection; it is available only for a previously verified unit.
 
-The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, and **0–100** for volume, following the reported ranges. Custom brightness and contrast calibration is hidden for this path. RGB gains subtract 50 for display when the reported maximum is 100: raw 51 was confirmed as **+1** in the OSD. The full RGB range has not been calibrated, and these gains do not control the separate **Color** slider. Input switching, power commands, and other undocumented Samsung controls remain unavailable.
+The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, **0–100** for volume, and **0–10** for Black Equalizer, following the reported ranges. Sharpness, white balance, Color Tone, and Black Equalizer are under **Monitor Settings → Picture**. Custom calibration and software dimming are hidden for this path. RGB gains subtract 50 for display when the reported maximum is 100: raw 51 was confirmed as **+1** in the OSD. The full RGB range has not been calibrated, and these gains do not control the separate **Color** slider. Input switching, power commands, and other undocumented Samsung controls remain unavailable.
+
+## Samsung Eye Saver Mode
+
+Eye Saver writes remain disabled while timing is being verified. **Off → Low** tests were not confirmed after either 150 ms or 1.5 seconds, so the app paused without retrying. A later read after the first attempt reported Low without another write. The user restored Off through the OSD after the final test; fresh readings matched all original settings, with the HDMI connection and 144 Hz mode stable. This suggests delayed application or reporting, not a proven unsupported feature or a reliable settling interval.
+
+When Color Tone or Black Equalizer is enabled, Monitor Bar reads Eye Saver first. If it is active or its state cannot be validated, the app blocks affected brightness, Picture Mode, Color Tone, RGB white balance, and Black Equalizer changes. Contrast, sharpness, and volume are not blocked by this Eye Saver check. Use the physical OSD to turn Eye Saver off, then refresh.
 
 ## Samsung Picture Mode
 
@@ -110,15 +116,15 @@ Software controls use the selected macOS display ID. Calibration preferences use
 
 ## The screen is dim after an adjustment
 
-Under **More controls → Software dimming**, choose **Restore image brightness**, or quit the app to remove its overlay. Hardware brightness and contrast are separate settings and may remain at the values last accepted by the monitor. The app does not restore all hardware controls on exit.
+On monitors other than the Samsung, open **Monitor Settings → Picture → Software dimming** and choose **Restore image brightness**, or quit the app to remove its overlay. Hardware brightness and contrast are separate settings and may remain at the values last accepted by the monitor. The app does not restore all hardware controls on exit.
 
 ## Collect useful diagnostics
 
-Open **Show details** for EDID information, mode flags, raw feature values, and reply statuses. **Read all 256 control codes** sends GetVCP requests; it may take a few minutes. It does not set control values or issue reset commands, but it still communicates with the monitor and must not be used after flashing or disconnection. For an affected setup, collect existing logs and a CoreGraphics mode-only report instead.
+Open **Monitor Settings → Information** for EDID information, mode flags, raw feature values, and reply statuses. **Read all 256 control codes** sends GetVCP requests; it may take a few minutes. It does not set control values or issue reset commands, but it still communicates with the monitor and must not be used after flashing or disconnection. For an affected setup, collect existing logs and a CoreGraphics mode-only report instead.
 
-The deep scan is disabled for the Samsung G91SD path. Its report contains cached display information, the seven slider controls, and Picture Mode when enabled and readable. PC/AV state is checked internally to select the correct preset mapping.
+The deep scan is disabled for the Samsung G91SD path. Its report contains cached display information and enabled controls, plus Eye Saver state when used as a prerequisite. PC/AV state is checked internally to select the correct Picture Mode mapping. An explicit unsupported reply is distinct from a valid but unusable value or a transport failure; the Information page preserves these statuses.
 
-Use the gear menu's **Export monitor report…** to save JSON locally. Reports can contain a monitor serial number, registry paths, and display identifiers. Review and redact them before posting anything publicly.
+Use **Monitor Settings → App → Export monitor report…** to save JSON locally. Reports can contain a monitor serial number, registry paths, and display identifiers. Review and redact them before posting anything publicly.
 
 For an [issue report]({{ site.repository_url }}/issues), include:
 

@@ -1,6 +1,6 @@
 ---
 title: Controls & calibration
-description: Use the everyday controls up front, and expand the rest when you need them.
+description: Keep everyday controls in the menu bar and open Monitor Settings for the rest.
 permalink: /controls/
 ---
 
@@ -10,13 +10,43 @@ Click the monitor icon in the menu bar. If more than one external display is lis
 
 | Location | What is there |
 |---|---|
-| Main card | Brightness, contrast, supported volume, and resolution; verified Samsung units also offer sharpness and Picture Mode |
-| More controls | Additional hardware settings, software dimming, and brightness/contrast calibration for monitors other than the Samsung |
-| Show details | Monitor information, DDC readback, and reported resolutions; full scan is unavailable for Samsung |
-| Gear menu | Pause/resume hardware controls, launch at login, report export, and macOS Displays settings |
-| Footer | Quit, or the Keep / Revert controls during a resolution preview |
+| Popup | Brightness, contrast, supported volume, Picture Mode for verified Samsung units, and separate Resolution, Scaling, and Refresh rate choices |
+| Gear button or Monitor settings… | Opens the Monitor Settings window |
+| Preview controls | Apply a prepared mode with Preview changes, then Keep or Revert within 15 seconds |
+| Footer | Open Monitor Settings or quit the app |
 
 Hardware choices appear only when the app can read the control and validate its range or choices. Samsung controls also require a local verification record for that individual unit. **Not supported** means the app cannot offer that control from the available reply; details distinguish explicit unsupported replies from communication failures and invalid data.
+
+## Monitor Settings
+
+Click the popup's gear button or **Monitor settings…** to open a normal Mac
+window for additional controls:
+
+| Section | Controls |
+|---|---|
+| Picture | Sharpness, white balance, other supported hardware controls, and calibration; software dimming is available for monitors other than the Samsung |
+| Information | Monitor details, hardware readback, reported modes, and diagnostic scans where supported |
+| App | Launch at login, pause/resume hardware controls, report export, and macOS Displays |
+
+The window shares the selected monitor and live state with the popup. Closing
+it keeps Monitor Bar running in the menu bar. A pending resolution preview's
+Keep/Revert controls are also available in the window.
+
+<figure class="panel-preview" style="max-width: 760px">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="{{ '/assets/samsung-settings-dark.png' | relative_url }}">
+    <img src="{{ '/assets/samsung-settings-light.png' | relative_url }}" alt="Monitor Settings window with Samsung image controls and white balance" width="1520" height="1240">
+  </picture>
+  <figcaption>Offline preview using sample Samsung data. Hardware controls require local verification.</figcaption>
+</figure>
+
+## Resolution, scaling, and refresh rate
+
+Version 0.1.2 replaces the combined mode picker with separate **Resolution**, **Scaling**, and **Refresh rate** choices.
+
+Choose a workspace size, select a rendering option, then choose an available refresh rate. Standard and HiDPI modes are labeled; different rendering pixel sizes remain available under Scaling. Fractional refresh rates stay distinct. **Unspecified** means macOS did not report a rate.
+
+Selections and HiDPI shortcuts prepare a change. Click **Preview changes** to apply it, then **Keep** within 15 seconds or **Revert**. Until you start the preview, the monitor stays in its current mode. See [Resolution & HiDPI]({{ '/hidpi/' | relative_url }}) for the full workflow.
 
 ## Hardware adjustments
 
@@ -30,7 +60,7 @@ Unknown feature codes and factory-reset commands are diagnostic-only. The app do
 
 ## Samsung G91SD controls
 
-Version 0.1.1 includes seven hardware sliders for an individually verified Samsung G91SD over direct HDMI. They start disabled on a new installation; there is no first-use verification or enable workflow in this release. The Samsung must be the Mac's only external display, though the built-in screen can stay active. [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) explains the verification limit.
+Version 0.1.2 includes brightness, contrast, volume, sharpness, RGB white balance, Black Equalizer, Color Tone, and PC Picture Mode for an individually verified Samsung G91SD over direct HDMI. Hardware controls start disabled on a new installation; there is no first-use verification or enable workflow in this release. The Samsung must be the Mac's only external display, though the built-in screen can stay active. [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) explains the verification limit.
 
 <figure class="panel-preview" style="max-width: 420px">
   <picture>
@@ -40,15 +70,19 @@ Version 0.1.1 includes seven hardware sliders for an individually verified Samsu
   <figcaption>Offline preview using sample Samsung data. Hardware controls require local verification.</figcaption>
 </figure>
 
-The sliders use the monitor's OSD units: brightness and contrast **0–50**, sharpness **0–20**, and volume **0–100**, following its reported ranges. White-balance controls are under **More controls**. For RGB gains reporting a maximum of 100, the display subtracts 50: raw 51 was observed as **+1** in the OSD. This is not a full-range color calibration, and it does not change the separate OSD **Color** setting.
+The sliders use the monitor's OSD units: brightness and contrast **0–50**, sharpness **0–20**, volume **0–100**, and Black Equalizer **0–10**, following its reported ranges. Sharpness and white balance are under **Monitor Settings → Picture**. For RGB gains reporting a maximum of 100, the display subtracts 50: raw 51 was observed as **+1** in the OSD. This is not a full-range color calibration, and it does not change the separate OSD **Color** setting.
 
-Samsung sliders apply when released. The app first reads the current hardware value and refuses a stale change, then sends one write and checks it once. There are no alternate packet-format retries or deep scans. A full refresh makes at most nine reads: seven slider values, PC/AV mode, and Picture Mode. Connection or transport failures pause further commands.
+**Color Tone** offers Cool, Standard, Warm 1, Warm 2, and Natural. Warm 1 ↔ Warm 2 and Black Equalizer 5 ↔ 6 were physically confirmed, then restored; other picture readbacks stayed unchanged. Testing has not covered every preset or the full Black Equalizer range. Each additional control requires its own local verification record. Samsung's Color Tone mapping is separate from generic color-temperature presets.
+
+**Eye Saver Mode** remains disabled while its delayed response is investigated. Its state is read before affected controls when an additional Samsung control is enabled. While Eye Saver is active or unavailable, brightness, Picture Mode, Color Tone, white balance, and Black Equalizer cannot be changed. See [Eye Saver timing]({{ '/troubleshooting/' | relative_url }}#samsung-eye-saver-mode) for the test result.
+
+Samsung sliders apply when released. The app first reads the current hardware value and refuses a stale change, then sends one write and checks it once. There are no alternate packet-format retries or deep scans. A full refresh makes at most 12 reads with all verified controls enabled and skips controls known to be locked. Preset changes complete and refresh related settings before another write is accepted. Connection or transport failures pause further commands.
 
 **Picture Mode**, above Resolution, needs separate per-unit verification and the Mac's input in **PC** mode. Its ten named PC choices were mapped from Samsung's official Display Manager app and the OSD; hardware changes between **Eco** and **Original** were physically confirmed. The [mode table]({{ '/troubleshooting/' | relative_url }}#samsung-picture-mode) distinguishes those tests from the other choices. Presets can change brightness, contrast, and color settings, so Monitor Bar temporarily disables adjustments and refreshes the sliders afterward.
 
 ## Pause and resume hardware controls
 
-Use **Gear menu → Pause hardware controls** to stop hardware discovery, reads, writes, and retries for every monitor. The pause survives relaunches and reconnections. Software dimming and macOS resolution selection remain available.
+Use **Monitor Settings → App → Pause hardware controls** to stop hardware discovery, reads, writes, and retries for every monitor. The pause survives relaunches and reconnections. macOS resolution selection and software dimming on other monitors remain available.
 
 When the connection is stable, **Resume hardware controls** restarts checks for connected monitors other than the Samsung, or for one previously verified Samsung connected on its own. Resume is unavailable with no external display, an unverified Samsung, or a Samsung mixed with another external display. Resuming a Samsung explicitly accepts its current HDMI connection; it does not verify a new unit for you.
 
@@ -58,7 +92,7 @@ These calibration controls apply to monitors other than the Samsung G91SD. Fresh
 
 The custom range maps the full percentage slider onto hardware values from **0 to a chosen maximum**. It is an endpoint mapping, not an automatic calibration or a measured luminance curve. Brightness and contrast have independent settings.
 
-1. Open **More controls → Brightness calibration** or **Contrast calibration**.
+1. Open **Monitor Settings → Picture → Calibration** and choose brightness or contrast.
 2. Turn on **Use custom range**. The initial proposed maximum is 25, or the advertised maximum if it is lower. This is a starting value to inspect, not a detected correct endpoint.
 3. Adjust **Maximum hardware value** to the end of the useful rising range for this control on your monitor.
 4. Move the corresponding main slider to try the mapping. If the visible effect reverses near the top, lower the maximum and try again.
@@ -76,10 +110,10 @@ The mapping is saved locally per control and per vendor/product/serial identity.
 
 ## Software dimming
 
-**More controls → Software dimming** adds a click-through dark overlay to the selected screen. **Image brightness** ranges from 20% to 100%. It darkens the image without reducing the physical backlight or changing hardware brightness calibration.
+On monitors other than the Samsung, **Monitor Settings → Picture → Software dimming** adds a click-through dark overlay to the selected screen. **Image brightness** ranges from 20% to 100%. It darkens the image without reducing the physical backlight or changing hardware brightness calibration.
 
 Use **Restore image brightness** or move the slider to 100% to remove the overlay. Quitting Monitor Bar also removes it. This setting is separate from hardware brightness and is not a monitor power-saving control.
 
 ## Settings managed by macOS
 
-Use the gear menu's **Open macOS Displays** action for HDR, arrangement, rotation, mirroring, and color profiles. Monitor Bar's [resolution controls]({{ '/hidpi/' | relative_url }}) choose among existing macOS modes; they do not install custom resolutions or EDID overrides.
+Use **Monitor Settings → App → Open macOS Displays** for HDR, arrangement, rotation, mirroring, and color profiles. Monitor Bar's [resolution controls]({{ '/hidpi/' | relative_url }}) choose among existing macOS modes; they do not install custom resolutions or EDID overrides.

@@ -1,23 +1,34 @@
 # To do
 
-The next additions focus on controlling the monitor itself over HDMI. These are
-research and implementation tasks, not a list of features already supported by
-Monitor Bar.
+The next additions focus on controlling the monitor itself over HDMI. Checked
+items are included in v0.1.2; unchecked items need further research or verification.
 
 ## Samsung G91SD: start here
 
 Target: **LS49DG910SNXZA, firmware 1003.2**. Samsung Display Manager's Mac app
-contains command mappings for these settings, but they still need testing on
-this monitor. Support in Samsung's multi-model app does not guarantee support
+contains command mappings for these settings. Testing status is recorded below. Support in Samsung's multi-model app does not guarantee support
 on every Samsung display.
 
-- [ ] **Eye Saver Mode** (`0x0A`): verify the supported levels and refresh any
-  brightness or color controls that become unavailable when it is enabled.
-- [ ] **Color Tone** (`0x14`): verify the Cool, Standard, Warm 1, Warm 2, and
-  Natural presets against the OSD. Use Samsung's mapping rather than generic
-  color-temperature assumptions.
-- [ ] **Black Equalizer** (`0x2F`): verify the range, direction, and restrictions
-  with Eye Saver Mode, PIP/PBP, and AV input timings.
+- [x] Add a separate **Monitor Settings** window for picture adjustments,
+  monitor information, and app preferences. Keep everyday controls in the popup.
+  Released in v0.1.2.
+
+- [x] **Color Tone** (`0x14`): add the five OSD choices in the settings window.
+  Warm 1 → Warm 2 was physically confirmed and restored to Warm 1. Other
+  reported picture values stayed unchanged.
+- [x] **Black Equalizer** (`0x2F`): add a hardware slider using the reported
+  0–10 range. The 5 → 6 change was physically confirmed and restored to 5.
+- [ ] **Eye Saver Mode** (`0x0A`): the read path matches the OSD, and its
+  Off/Low/High choices are mapped. Off → Low tests failed to confirm at both
+  150 ms and 1.5 seconds. The app paused without retrying. A later read after
+  the first attempt reported Low. The user restored Off through the OSD after
+  the final test, and fresh readings matched the originals. Leave writes disabled until settling time and physical behavior
+  are verified; this is not a proven unsupported feature.
+- [ ] Extend verification beyond the small successful tests: remaining Color
+  Tone presets, Black Equalizer endpoints/direction, and behavior with Eye Saver,
+  PIP/PBP, and AV timings. Do not treat the initial tests as complete range or
+  connection-mode coverage.
+
 - [ ] **Virtual Aim Point** (`0xED`–`0xEF`): decode and verify the built-in
   crosshair styles, position controls, and position reset. Samsung's app has
   model-specific handling here.

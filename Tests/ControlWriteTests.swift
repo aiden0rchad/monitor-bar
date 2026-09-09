@@ -242,6 +242,62 @@ private final class GatedWriter {
         await eventually("Brightness completes") { !second.writing }
     }
 
+    @MainActor static func samsungAdvancedChecks() async {
+        preferences.removeObject(forKey: Hardware.pauseKey)
+        let display = DisplayInfo(id: 99, name: "Samsung test", vendor: 0x4C2D, product: 0x778D, serial: 999,
+                                  builtIn: false, widthMM: 1200, heightMM: 340, rotation: 0, currentModeID: 0, modes: [])
+        let eye = VCPFeature(code: 0x0A, current: 0, maximum: 2, type: 0, status: "ok")
+        let tone = VCPFeature(code: 0x14, current: 2, maximum: 4, type: 0, status: "ok")
+        let black = VCPFeature(code: 0x2F, current: 5, maximum: 10, type: 0, status: "ok")
+        let brightness = VCPFeature(code: 0x10, current: 25, maximum: 50, type: 0, status: "ok")
+        let snapshot = MonitorProbe(display: display, capabilities: "(vcp(14(01 02 04 05 06 08 0B)))",
+                                    features: [eye, tone, black, brightness])
+        let writer = GatedWriter()
+        defer {
+            writer.gates.forEach { $0.signal() }
+            for code in Hardware.samsungAdvancedControlCodes {
+                preferences.removeObject(forKey: Hardware.samsungAdvancedEnableKey(display, code: code))
+            }
+        }
+        preferences.set(true, forKey: Hardware.samsungEnableKey(display))
+        let store = MonitorStore(snapshot: snapshot, writer: writer.write, preferences: preferences)
+        precondition(store.allowedChoices(for: tone).isEmpty, "Samsung must never fall back to generic color-temperature values")
+        precondition(!store.isWritableSlider(black))
+        for feature in [eye, tone, black] { store.set(feature, value: 1) }
+        precondition(!store.writing && writer.values.isEmpty, "New controls require separate verification")
+        for code in Hardware.samsungAdvancedControlCodes {
+            preferences.set(true, forKey: Hardware.samsungAdvancedEnableKey(display, code: code))
+        }
+        precondition(store.allowedChoices(for: eye).map(\.0) == [0, 1, 2])
+        precondition(store.allowedChoices(for: tone).map(\.1) == ["Cool", "Standard", "Warm 1", "Warm 2", "Natural"])
+        precondition(store.controlName(for: tone) == "Color Tone" && store.isWritableSlider(black))
+        store.set(black, value: 11)
+        store.set(tone, value: 5)
+        precondition(!store.writing, "Out-of-range values must be rejected")
+        store.features[0].current = 1
+        precondition(store.allowedChoices(for: tone).isEmpty && !store.isWritableSlider(black) && !store.isWritableSlider(brightness))
+        store.set(black, value: 6)
+        precondition(!store.writing && !store.allowedChoices(for: store.features[0]).isEmpty,
+                     "Eye Saver locks affected settings but remains available to switch off")
+        store.features[0].status = "unsupported"
+        precondition(!store.isWritableSlider(black), "Missing Eye Saver state must fail closed")
+        store.features[0] = eye
+        store.set(black, value: 6)
+        await eventually("Black Equalizer write") { writer.values == [6] }
+        writer.gates[0].signal()
+        await eventually("Black Equalizer readback") { !store.writing }
+        precondition(store.features[2].current == 6)
+        store.set(tone, value: 3)
+        await eventually("Color Tone write") { writer.values == [6, 3] }
+        store.set(brightness, value: 24)
+        store.set(eye, value: 1)
+        precondition(store.pendingValues == [0x14: 3], "Tone changes must finish and refresh before another picture write")
+        // Prevent this offline preset fixture from initiating a live post-write refresh.
+        store.pauseHardwareCommands()
+        writer.gates[1].signal()
+        await eventually("Paused color queue") { !store.writing }
+    }
+
     @MainActor static func main() async {
         defer { preferences.removePersistentDomain(forName: preferenceSuite) }
         readbackChecks()
@@ -251,6 +307,7 @@ private final class GatedWriter {
         await pauseChecks()
         await samsungChecks()
         await samsungPictureModeChecks()
+        await samsungAdvancedChecks()
         print("Control write, readback, and persistent pause scenarios passed (no hardware access)")
     }
 }

@@ -28,11 +28,16 @@ enum Hardware {
         (0, "Entertain"), (1, "Graphic"), (2, "Eco"), (3, "Game Standard"), (4, "RPG"),
         (5, "RTS"), (6, "FPS"), (7, "Sports"), (8, "Original"), (9, "Custom")
     ]
+    static let samsungAdvancedControlCodes: [UInt8] = [0x0A, 0x14, 0x2F]
+    static let samsungEyeSaverAffectedCodes: [UInt8] = [0x10, 0x14, 0x16, 0x18, 0x1A, 0x2F, 0x2D]
     private static var samsungConnections: [String: DDCHDMIConnection] = [:]
     private static let samsungLock = NSLock()
 
     static func samsungEnableKey(_ display: DisplayInfo) -> String { "samsungHardwareEnabled.\(display.identity)" }
     static func samsungPictureModeEnableKey(_ display: DisplayInfo) -> String { "samsungPictureModeEnabled.\(display.identity)" }
+    static func samsungAdvancedEnableKey(_ display: DisplayInfo, code: UInt8) -> String {
+        "samsungAdvancedEnabled.\(display.identity)." + String(format: "%02X", code)
+    }
 
     static func canUseSamsungControls(_ display: DisplayInfo, preferences: UserDefaults = commandPreferences) -> Bool {
         guard preferences.synchronize() else { return false }
@@ -51,6 +56,36 @@ enum Hardware {
 
     static func isValidSamsungPictureMode(_ feature: VCPFeature) -> Bool {
         feature.code == 0x2D && feature.isReadable && feature.type == 0 && feature.maximum == 10 && feature.current <= 9
+    }
+
+    static func canUseSamsungAdvancedControl(_ display: DisplayInfo, code: UInt8,
+                                             preferences: UserDefaults = commandPreferences) -> Bool {
+        guard samsungAdvancedControlCodes.contains(code), canUseSamsungControls(display, preferences: preferences),
+              let value = preferences.object(forKey: samsungAdvancedEnableKey(display, code: code)) as? NSNumber,
+              CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
+        return value.boolValue
+    }
+
+    static func samsungAdvancedChoices(for code: UInt8) -> [(UInt16, String)] {
+        switch code {
+        case 0x0A: return [(0, "Off"), (1, "Low"), (2, "High")]
+        case 0x14: return [(0, "Cool"), (1, "Standard"), (2, "Warm 1"), (3, "Warm 2"), (4, "Natural")]
+        default: return []
+        }
+    }
+
+    static func isValidSamsungAdvancedControl(_ feature: VCPFeature) -> Bool {
+        guard feature.isReadable, feature.type == 0 else { return false }
+        switch feature.code {
+        case 0x0A: return feature.maximum == 2 && feature.current <= 2
+        case 0x14: return feature.maximum == 4 && feature.current <= 4
+        case 0x2F: return feature.maximum == 10 && feature.current <= 10
+        default: return false
+        }
+    }
+
+    static func isValidSamsungAdvancedValue(code: UInt8, value: UInt16) -> Bool {
+        code == 0x2F ? value <= 10 : samsungAdvancedChoices(for: code).contains { $0.0 == value }
     }
 
     static func pauseReason(in preferences: UserDefaults = commandPreferences) -> String? {
@@ -255,7 +290,9 @@ enum Hardware {
             return result
         }
         let session = samsungSession(handle)
-        result.features = session.scan(includePictureMode: canUseSamsungPictureMode(display), progress: progress)
+        result.features = session.scan(includePictureMode: canUseSamsungPictureMode(display),
+                                       advancedCodes: samsungAdvancedControlCodes.filter { canUseSamsungAdvancedControl(display, code: $0) },
+                                       progress: progress)
         if hardwareCommandsPaused || session.fault != nil {
             result.features = []
             result.note = pauseReason() ?? session.fault ?? pauseMessage
@@ -274,9 +311,16 @@ enum Hardware {
         guard !hardwareCommandsPaused else { return (nil, pauseReason() ?? pauseMessage) }
         guard canUseSamsungControls(display) else { return (nil, "Hardware controls are not enabled for this Samsung display.") }
         let pictureMode = feature.code == 0x2D
-        let allowed = pictureMode
-            ? canUseSamsungPictureMode(display) && isValidSamsungPictureMode(feature) && value <= 9
-            : samsungControlCodes.contains(feature.code) && feature.isSlider && value <= feature.maximum
+        let advanced = samsungAdvancedControlCodes.contains(feature.code)
+        let allowed: Bool
+        if pictureMode {
+            allowed = canUseSamsungPictureMode(display) && isValidSamsungPictureMode(feature) && value <= 9
+        } else if advanced {
+            allowed = canUseSamsungAdvancedControl(display, code: feature.code) &&
+                isValidSamsungAdvancedControl(feature) && isValidSamsungAdvancedValue(code: feature.code, value: value)
+        } else {
+            allowed = samsungControlCodes.contains(feature.code) && feature.isSlider && value <= feature.maximum
+        }
         guard allowed else {
             return (nil, "This Samsung control or value is not supported.")
         }
@@ -288,7 +332,10 @@ enum Hardware {
         defer { DDCClose(handle) }
         guard DDCGuardHDMIConnection(handle, &connection) == 1 else { return (nil, pauseReason() ?? pauseMessage) }
         let session = samsungSession(handle)
-        return pictureMode ? session.writePictureMode(feature: feature, value: value) : session.write(feature: feature, value: value)
+        let guardEyeSaver = samsungAdvancedControlCodes.contains { canUseSamsungAdvancedControl(display, code: $0) }
+        if pictureMode { return session.writePictureMode(feature: feature, value: value, guardEyeSaver: guardEyeSaver) }
+        if advanced { return session.writeAdvanced(feature: feature, value: value) }
+        return session.write(feature: feature, value: value, guardEyeSaver: guardEyeSaver)
     }
 
     // Injected operations keep the complete Samsung request budget testable offline.
@@ -323,6 +370,15 @@ enum Hardware {
             return result
         }
 
+        func advancedFeature(_ code: UInt8) -> VCPFeature {
+            guard samsungAdvancedControlCodes.contains(code) else {
+                return VCPFeature(code: code, current: 0, maximum: 0, type: 0, status: "unsupported")
+            }
+            var result = readFeature(code)
+            if result.isReadable && !isValidSamsungAdvancedControl(result) { result.status = "unavailable" }
+            return result
+        }
+
         private func readFeature(_ code: UInt8) -> VCPFeature {
             var result = VCPFeature(code: code, current: 0, maximum: 0, type: 0, status: "paused")
             guard !isPaused(), fault == nil else { return result }
@@ -332,7 +388,7 @@ enum Hardware {
             result = VCPFeature(code: code, current: value.current, maximum: value.maximum,
                                 type: value.type, status: String(cString: DDCStatusName(value.status)))
             guard !isPaused() else { result.status = "paused"; return result }
-            if value.status == DDC_UNSUPPORTED { return result }
+            if value.status == DDC_UNSUPPORTED && value.ioReturn == 0 { return result }
             guard value.status == DDC_OK, value.ioReturn == 0 else {
                 fail("Samsung \(result.name) read failed (\(result.status), I/O \(value.ioReturn)). Hardware controls were paused.")
                 return result
@@ -351,30 +407,71 @@ enum Hardware {
             return mode
         }
 
-        func scan(includePictureMode: Bool = false, progress: ((Int) -> Void)? = nil) -> [VCPFeature] {
+        private func eyeSaverOff() -> Bool {
+            let eye = advancedFeature(0x0A)
+            return isValidSamsungAdvancedControl(eye) && eye.current == 0
+        }
+
+        func scan(includePictureMode: Bool = false, advancedCodes: [UInt8] = [],
+                  progress: ((Int) -> Void)? = nil) -> [VCPFeature] {
             var features: [VCPFeature] = []
-            for (index, code) in samsungControlCodes.enumerated() {
+            let advanced = samsungAdvancedControlCodes.filter { advancedCodes.contains($0) }
+            var completed = 0
+            func didRead() { completed += 1; progress?(completed) }
+            func unavailable(_ code: UInt8) -> VCPFeature {
+                VCPFeature(code: code, current: 0, maximum: 0, type: 0, status: "unavailable")
+            }
+            var eye: VCPFeature?
+            if !advanced.isEmpty {
                 guard !isPaused(), fault == nil else { return [] }
-                features.append(feature(code))
-                progress?(index + 1)
+                eye = advancedFeature(0x0A)
+                didRead()
+            }
+            let eyeOff = eye.map { isValidSamsungAdvancedControl($0) && $0.current == 0 } ?? true
+            for code in samsungControlCodes {
+                guard !isPaused(), fault == nil else { return [] }
+                if !eyeOff && samsungEyeSaverAffectedCodes.contains(code) {
+                    features.append(unavailable(code))
+                } else {
+                    features.append(feature(code))
+                    didRead()
+                }
             }
             if includePictureMode && !isPaused() && fault == nil {
-                let pc = pcInputAvailable()
-                progress?(8)
-                if pc && !isPaused() && fault == nil {
-                    features.append(pictureModeFeature())
-                    progress?(9)
+                if eyeOff {
+                    let pc = pcInputAvailable()
+                    didRead()
+                    if pc && !isPaused() && fault == nil {
+                        features.append(pictureModeFeature())
+                        didRead()
+                    } else {
+                        features.append(unavailable(0x2D))
+                    }
                 } else {
-                    features.append(VCPFeature(code: 0x2D, current: 0, maximum: 0, type: 0, status: "unavailable"))
+                    features.append(unavailable(0x2D))
+                }
+            }
+            // Prerequisite state belongs in the snapshot even when only another
+            // advanced control is enabled. Its write permission remains separate.
+            if let eye { features.append(eye) }
+            for code in advanced where code != 0x0A {
+                guard !isPaused(), fault == nil else { return [] }
+                if !eyeOff && samsungEyeSaverAffectedCodes.contains(code) {
+                    features.append(unavailable(code))
+                } else {
+                    features.append(advancedFeature(code))
+                    didRead()
                 }
             }
             return isPaused() || fault != nil ? [] : features
         }
 
-        func writePictureMode(feature original: VCPFeature, value: UInt16) -> (VCPFeature?, String) {
+        func writePictureMode(feature original: VCPFeature, value: UInt16,
+                              guardEyeSaver: Bool = false) -> (VCPFeature?, String) {
             guard isValidSamsungPictureMode(original), value <= 9 else {
                 return (nil, "This Samsung Picture Mode has not been validated for PC input.")
             }
+            if guardEyeSaver && !eyeSaverOff() { return eyeSaverBlocked(original) }
             guard pcInputAvailable() else {
                 if isPaused() || fault != nil { return (nil, fault ?? pauseReason() ?? pauseMessage) }
                 var unavailable = original
@@ -409,13 +506,36 @@ enum Hardware {
             return (after, "Picture Mode confirmed: \(value).")
         }
 
-        func write(feature original: VCPFeature, value: UInt16) -> (VCPFeature?, String) {
-            guard samsungControlCodes.contains(original.code), original.isSlider, value <= original.maximum else {
+        private func eyeSaverBlocked(_ original: VCPFeature) -> (VCPFeature?, String) {
+            guard !isPaused(), fault == nil else { return (nil, fault ?? pauseReason() ?? pauseMessage) }
+            var unavailable = original
+            unavailable.status = "unavailable"
+            return (unavailable, "\(original.name) requires Eye Saver Off. Its current availability could not be confirmed; nothing was written.")
+        }
+
+        func write(feature original: VCPFeature, value: UInt16, guardEyeSaver: Bool = false) -> (VCPFeature?, String) {
+            writeChecked(feature: original, value: value, advanced: false, guardEyeSaver: guardEyeSaver)
+        }
+
+        func writeAdvanced(feature original: VCPFeature, value: UInt16) -> (VCPFeature?, String) {
+            writeChecked(feature: original, value: value, advanced: true, guardEyeSaver: true)
+        }
+
+        private func writeChecked(feature original: VCPFeature, value: UInt16, advanced: Bool,
+                                  guardEyeSaver: Bool) -> (VCPFeature?, String) {
+            func valid(_ feature: VCPFeature) -> Bool {
+                advanced ? isValidSamsungAdvancedControl(feature) && isValidSamsungAdvancedValue(code: feature.code, value: value)
+                    : samsungControlCodes.contains(feature.code) && feature.isSlider && value <= feature.maximum
+            }
+            guard valid(original) else {
                 return (nil, "This Samsung control or value is not supported.")
             }
-            let before = feature(original.code)
+            if guardEyeSaver && samsungEyeSaverAffectedCodes.contains(original.code) && !eyeSaverOff() {
+                return eyeSaverBlocked(original)
+            }
+            let before = advanced ? advancedFeature(original.code) : feature(original.code)
             guard !isPaused(), fault == nil else { return (nil, fault ?? pauseReason() ?? pauseMessage) }
-            guard before.isSlider, value <= before.maximum else {
+            guard valid(before) else {
                 return (before, "\(before.name) is currently unavailable or outside the monitor’s reported range.")
             }
             if before.current == value { return (before, "\(before.name) confirmed: \(value).") }
@@ -430,9 +550,9 @@ enum Hardware {
                 fail("Samsung \(before.name) write failed (\(String(cString: DDCStatusName(sent)))). Hardware controls were paused.")
                 return (nil, fault!)
             }
-            let after = feature(original.code)
+            let after = advanced ? advancedFeature(original.code) : feature(original.code)
             guard !isPaused(), fault == nil else { return (nil, fault ?? pauseReason() ?? pauseMessage) }
-            guard after.isSlider, after.current == value, after.maximum == before.maximum else {
+            guard valid(after), after.current == value, after.maximum == before.maximum else {
                 fail("Samsung \(after.name) reported \(after.current)/\(after.maximum) (\(after.status)) after requesting \(value). Hardware controls were paused because the change was not confirmed.")
                 return (after, fault!)
             }

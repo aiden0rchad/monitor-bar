@@ -1,0 +1,140 @@
+{
+  "display": {
+    "id": 99,
+    "name": "Odyssey G91SD",
+    "vendor": 19501,
+    "product": 30605,
+    "serial": 999,
+    "builtIn": false,
+    "widthMM": 1193,
+    "heightMM": 339,
+    "rotation": 0,
+    "currentModeID": 1,
+    "modes": [
+      {
+        "id": 1,
+        "width": 5120,
+        "height": 1440,
+        "pixelWidth": 5120,
+        "pixelHeight": 1440,
+        "refreshRate": 144,
+        "ioFlags": 33554439,
+        "isDesktopUsable": true
+      },
+      {
+        "id": 2,
+        "width": 5120,
+        "height": 1440,
+        "pixelWidth": 5120,
+        "pixelHeight": 1440,
+        "refreshRate": 120,
+        "ioFlags": 3,
+        "isDesktopUsable": true
+      },
+      {
+        "id": 3,
+        "width": 5120,
+        "height": 1440,
+        "pixelWidth": 5120,
+        "pixelHeight": 1440,
+        "refreshRate": 60,
+        "ioFlags": 3,
+        "isDesktopUsable": true
+      },
+      {
+        "id": 4,
+        "width": 2560,
+        "height": 720,
+        "pixelWidth": 5120,
+        "pixelHeight": 1440,
+        "refreshRate": 144,
+        "ioFlags": 3,
+        "isDesktopUsable": true
+      }
+    ]
+  },
+  "capabilities": "",
+  "capabilitiesStatus": "not requested",
+  "features": [
+    {
+      "code": 16,
+      "current": 49,
+      "maximum": 50,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 18,
+      "current": 49,
+      "maximum": 50,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 135,
+      "current": 11,
+      "maximum": 20,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 22,
+      "current": 51,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 24,
+      "current": 51,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 26,
+      "current": 51,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 98,
+      "current": 74,
+      "maximum": 100,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 45,
+      "current": 2,
+      "maximum": 10,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 10,
+      "current": 0,
+      "maximum": 2,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 20,
+      "current": 2,
+      "maximum": 4,
+      "type": 0,
+      "status": "ok"
+    },
+    {
+      "code": 47,
+      "current": 5,
+      "maximum": 10,
+      "type": 0,
+      "status": "ok"
+    }
+  ],
+  "note": "Synthetic settings-window preview; no hardware verification is implied.",
+  "scannedAt": "2026-09-09T07:55:00Z",
+  "fullScan": false
+}

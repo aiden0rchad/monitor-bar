@@ -74,7 +74,7 @@ import UniformTypeIdentifiers
     private var refreshRequested = false
     private var dimPanel: NSPanel?
     private var modeTimer: Timer?
-    private var previousMode: (UInt32, CGDisplayMode)?
+    private var previousMode: (DisplayInfo, CGDisplayMode)?
     private var previewedMode: DisplayModeInfo?
     private let writer: (DisplayInfo, VCPFeature, UInt16) -> (VCPFeature?, String)
     private let preferences: UserDefaults
@@ -115,6 +115,7 @@ import UniformTypeIdentifiers
             dimPanel?.close()
             dimPanel = nil
         } else if dimming < 1 { setDimming(dimming) }
+        if pendingMode && !pendingDisplayIsConnected { revertMode() }
         if !pendingMode { refresh() }
     }
 
@@ -232,6 +233,13 @@ import UniformTypeIdentifiers
 
     func allowedChoices(for feature: VCPFeature) -> [(UInt16, String)] {
         guard feature.isReadable else { return [] }
+        if usesSamsungControls {
+            guard !eyeSaverLocks(feature.code) else { return [] }
+            if Hardware.samsungAdvancedControlCodes.contains(feature.code) {
+                guard canUseAdvancedControl(feature.code), Hardware.isValidSamsungAdvancedControl(feature) else { return [] }
+                return Hardware.samsungAdvancedChoices(for: feature.code)
+            }
+        }
         if feature.code == 0x2D {
             guard let display = selected, Hardware.canUseSamsungPictureMode(display, preferences: preferences),
                   feature.type == 0, feature.maximum == 10, feature.current < 10 else { return [] }
@@ -239,6 +247,32 @@ import UniformTypeIdentifiers
         }
         let advertised = Capabilities.features(capabilities)[feature.code] ?? []
         return feature.choices.filter { advertised.contains($0.0) }
+    }
+
+    func canUseAdvancedControl(_ code: UInt8) -> Bool {
+        selected.map { Hardware.canUseSamsungAdvancedControl($0, code: code, preferences: preferences) } == true
+    }
+
+    func controlName(for feature: VCPFeature) -> String {
+        guard usesSamsungControls else { return feature.name }
+        return [0x0A: "Eye Saver Mode", 0x14: "Color Tone", 0x2F: "Black Equalizer"][Int(feature.code)] ?? feature.name
+    }
+
+    private func eyeSaverLocks(_ code: UInt8) -> Bool {
+        guard usesSamsungControls, Hardware.samsungEyeSaverAffectedCodes.contains(code),
+              Hardware.samsungAdvancedControlCodes.contains(where: { canUseAdvancedControl($0) }) else { return false }
+        guard let eye = features.first(where: { $0.code == 0x0A }),
+              Hardware.isValidSamsungAdvancedControl(eye) else { return true }
+        return eye.current != 0
+    }
+
+    func isWritableSlider(_ feature: VCPFeature) -> Bool {
+        guard !usesSamsungControls || !eyeSaverLocks(feature.code) else { return false }
+        if usesSamsungControls && Hardware.samsungAdvancedControlCodes.contains(feature.code) {
+            return feature.code == 0x2F && canUseAdvancedControl(feature.code)
+                && Hardware.isValidSamsungAdvancedControl(feature)
+        }
+        return feature.isSlider
     }
 
     func controlPercent(for feature: VCPFeature) -> Double {
@@ -283,15 +317,19 @@ import UniformTypeIdentifiers
         guard !busy, !pendingMode, selected != nil,
               let live = features.first(where: { $0.code == feature.code }), live.isReadable else { return }
         if let display = selected, display.isSamsungG91SD {
-            guard pendingValues[0x2D] == nil, live.code != 0x2D || !writing else { return }
+            let presetCodes: [UInt8] = [0x0A, 0x14, 0x2D]
+            guard !pendingValues.keys.contains(where: { presetCodes.contains($0) }),
+                  !presetCodes.contains(live.code) || !writing,
+                  !eyeSaverLocks(live.code) else { return }
             guard Hardware.canUseSamsungControls(display, preferences: preferences),
                   Hardware.samsungControlCodes.contains(live.code)
-                    || (live.code == 0x2D && Hardware.canUseSamsungPictureMode(display, preferences: preferences)) else {
+                    || (live.code == 0x2D && Hardware.canUseSamsungPictureMode(display, preferences: preferences))
+                    || canUseAdvancedControl(live.code) else {
                 message = "This Samsung control has not been enabled for this monitor."
                 return
             }
         }
-        guard (live.isSlider && value <= live.maximum) || allowedChoices(for: live).contains(where: { $0.0 == value }) else {
+        guard (isWritableSlider(live) && value <= live.maximum) || allowedChoices(for: live).contains(where: { $0.0 == value }) else {
             message = "That setting is not a supported writable control."
             return
         }
@@ -303,7 +341,7 @@ import UniformTypeIdentifiers
         guard pendingValues[live.code] != nil || value != live.current else { return }
         pendingValues[live.code] = value
         writing = true
-        if live.code == 0x2D, let name = allowedChoices(for: live).first(where: { $0.0 == value })?.1 {
+        if let name = allowedChoices(for: live).first(where: { $0.0 == value })?.1 {
             message = "Applying \(name)…"
         } else {
             message = controlLimits[live.code] != nil ? "Applying \(live.name.lowercased())…" : "Applying \(live.name): \(value)…"
@@ -349,9 +387,14 @@ import UniformTypeIdentifiers
                     self.pendingValues.removeValue(forKey: code)
                     self.message = self.controlLimits[code] != nil && readback?.current == value
                         ? "\(live.name) command confirmed." : status
+                    if display.isSamsungG91SD, Hardware.samsungAdvancedControlCodes.contains(code),
+                       readback?.isReadable == true, readback?.current == value {
+                        let label = self.allowedChoices(for: readback!).first { $0.0 == value }?.1 ?? String(value)
+                        self.message = "\(self.controlName(for: live)) confirmed: \(label)."
+                    }
                 }
                 // A preset can replace several picture values. Read them before accepting another write.
-                if display.isSamsungG91SD && code == 0x2D { self.refreshRequested = true }
+                if display.isSamsungG91SD && [0x0A, 0x14, 0x2D].contains(code) { self.refreshRequested = true }
                 if self.pendingValues.isEmpty {
                     self.writing = false
                     self.finishOperation()
@@ -387,10 +430,30 @@ import UniformTypeIdentifiers
         dimPanel?.orderFrontRegardless()
     }
 
-    func setMode(_ id: Int32) {
+    func setMode(_ requested: DisplayModeInfo, on expectedDisplay: DisplayInfo) {
+        guard let display = selected, display.id == expectedDisplay.id,
+              display.identity == expectedDisplay.identity, display.currentMode == expectedDisplay.currentMode,
+              display.modes.contains(requested),
+              CGDisplayVendorNumber(display.id) == display.vendor,
+              CGDisplayModelNumber(display.id) == display.product,
+              CGDisplaySerialNumber(display.id) == display.serial,
+              let expectedCurrent = expectedDisplay.currentMode else {
+            message = "The display changed. Choose your settings again."
+            return
+        }
+        setMode(requested.id, expectedCurrent: expectedCurrent)
+    }
+
+    private func setMode(_ id: Int32, expectedCurrent: DisplayModeInfo) {
         guard !busy, !writing, !pendingMode, let display = selected, id != display.currentModeID,
-              let requested = display.selectableModes.first(where: { $0.id == id && $0.isSelectable }),
-              let original = CGDisplayCopyDisplayMode(display.id),
+              let requested = display.modes.first(where: { $0.id == id && $0.isSelectable }),
+              let original = CGDisplayCopyDisplayMode(display.id) else { return }
+        guard Self.matches(original, expectedCurrent) else {
+            displays = Hardware.displays()
+            message = "The display mode changed. Choose your settings again."
+            return
+        }
+        guard
               let modes = CGDisplayCopyAllDisplayModes(display.id, [kCGDisplayShowDuplicateLowResolutionModes: true] as CFDictionary) as? [CGDisplayMode],
               let mode = modes.first(where: { $0.ioDisplayModeID == id && Self.matches($0, requested) }) else { return }
         // Temporary configuration asks WindowServer to restore it if this app exits.
@@ -399,7 +462,7 @@ import UniformTypeIdentifiers
         guard CGConfigureDisplayWithDisplayMode(config, display.id, mode, nil) == .success else {
             CGCancelDisplayConfiguration(config); message = "macOS rejected that display mode."; return
         }
-        previousMode = (display.id, original)
+        previousMode = (display, original)
         pendingMode = true
         let result = CGCompleteDisplayConfiguration(config, .forAppOnly)
         guard result == .success else {
@@ -427,14 +490,15 @@ import UniformTypeIdentifiers
     }
 
     func keepMode() {
-        guard pendingMode, let (id, _) = previousMode, let mode = CGDisplayCopyDisplayMode(id),
+        guard pendingMode, pendingDisplayIsConnected, let (display, _) = previousMode,
+              let mode = CGDisplayCopyDisplayMode(display.id),
               let previewedMode, Self.matches(mode, previewedMode) else {
             if pendingMode { revertMode() }
             return
         }
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let config else { message = "Could not keep the display mode."; return }
-        guard CGConfigureDisplayWithDisplayMode(config, id, mode, nil) == .success else { CGCancelDisplayConfiguration(config); return }
+        guard CGConfigureDisplayWithDisplayMode(config, display.id, mode, nil) == .success else { CGCancelDisplayConfiguration(config); return }
         guard CGCompleteDisplayConfiguration(config, .forSession) == .success else { message = "Could not keep the display mode; it will revert."; return }
         modeTimer?.invalidate(); modeTimer = nil; previousMode = nil; self.previewedMode = nil; pendingMode = false
         message = "\(previewedMode.label) verified and kept for this login session."
@@ -442,22 +506,34 @@ import UniformTypeIdentifiers
     }
 
     private static func matches(_ mode: CGDisplayMode, _ requested: DisplayModeInfo) -> Bool {
-        mode.width == requested.width && mode.height == requested.height &&
+        mode.ioDisplayModeID == requested.id && mode.width == requested.width && mode.height == requested.height &&
         mode.pixelWidth == requested.pixelWidth && mode.pixelHeight == requested.pixelHeight &&
-        abs(mode.refreshRate - requested.refreshRate) < 0.01 && mode.ioFlags == requested.ioFlags
+        mode.refreshRate == requested.refreshRate && mode.ioFlags == requested.ioFlags
+    }
+
+    private var pendingDisplayIsConnected: Bool {
+        guard let (display, _) = previousMode else { return false }
+        return CGDisplayIsActive(display.id) != 0 && CGDisplayVendorNumber(display.id) == display.vendor
+            && CGDisplayModelNumber(display.id) == display.product && CGDisplaySerialNumber(display.id) == display.serial
     }
 
     private func restorePendingMode() {
-        if let (id, mode) = previousMode { _ = CGDisplaySetDisplayMode(id, mode, nil) }
+        if pendingDisplayIsConnected, let (display, mode) = previousMode {
+            _ = CGDisplaySetDisplayMode(display.id, mode, nil)
+        }
     }
 
     func revertMode() {
         modeTimer?.invalidate(); modeTimer = nil
-        guard let (id, mode) = previousMode else { pendingMode = false; return }
-        let result = CGDisplaySetDisplayMode(id, mode, nil)
+        guard let (display, mode) = previousMode else { pendingMode = false; return }
+        let result = pendingDisplayIsConnected ? CGDisplaySetDisplayMode(display.id, mode, nil) : nil
         previousMode = nil; previewedMode = nil; pendingMode = false
         displays = Hardware.displays()
-        message = result == .success ? "Previous display mode restored." : "Could not restore the mode. Open macOS Displays settings (error \(result.rawValue))."
+        if let result {
+            message = result == .success ? "Previous display mode restored." : "Could not restore the mode. Open macOS Displays settings (error \(result.rawValue))."
+        } else {
+            message = "The original display disconnected. Preview ended without changing another display."
+        }
     }
 
     func exportReport() {

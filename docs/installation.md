@@ -19,11 +19,11 @@ The app controls external monitors. It does not provide built-in Mac display bri
 3. Move **Monitor Bar.app** into **Applications**.
 4. Open the app, then click its monitor icon in the menu bar.
 
-The app has no Dock icon and no ordinary main window. Its controls open from the menu bar icon. If another copy is already running, quit it before opening a replacement.
+The app has no Dock icon. Everyday controls open from the menu bar icon; the gear button opens a separate **Monitor Settings** window. Closing that window keeps the app running. If another copy is already running, quit it before opening a replacement.
 
 ### Samsung G91SD on a new installation
 
-The Samsung control code is included in v0.1.1, but hardware controls start disabled without a local verification record for the individual monitor. Matching the model is not enough, and the release does not include an automatic verification or first-use enable button. Picture Mode needs its own verification and the Mac input set to PC mode.
+The Samsung control code is included in v0.1.2, but hardware controls start disabled without a local verification record for the individual monitor. Matching the model is not enough, and the release does not include an automatic verification or first-use enable button. Picture Mode, Color Tone, and Black Equalizer each need separate verification. Picture Mode also needs the Mac input set to PC mode.
 
 Resolution selection remains available through macOS. If you want to help verify another Samsung unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with its model, firmware, Mac, and HDMI connection details. See [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) for the tested setup and current limits.
 
@@ -39,7 +39,7 @@ Do not disable Gatekeeper or remove system-wide protections to run the app. A wa
 
 Implemented display controls do not require administrator access, Accessibility permission, or Screen Recording permission. No helper daemon is installed.
 
-The gear menu includes **Launch at login**. If macOS asks for approval, open **System Settings → General → Login Items** and allow Monitor Bar. Enable this after moving the app to its permanent location.
+Open **Monitor Settings → App** and enable **Launch Monitor Bar at login**. If macOS asks for approval, open **System Settings → General → Login Items** and allow Monitor Bar. Enable this after moving the app to its permanent location.
 
 ## Update
 

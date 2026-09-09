@@ -4,9 +4,19 @@ description: Separate workspace size, rendering pixels, and aspect ratio when ch
 permalink: /hidpi/
 ---
 
-## Read the mode information
+Version 0.1.2 separates display-mode selection into resolution, scaling, and refresh rate. You can prepare a combination before previewing it.
 
-Open **Resolution** in the main card. The picker groups HiDPI and standard modes and includes refresh rates. The line underneath shows the current scale, rendering pixels, and aspect ratio.
+## Choose resolution, scaling, and refresh rate
+
+The main card separates display modes into three choices:
+
+- **Resolution** lists each logical workspace size once.
+- **Scaling** selects a rendering option for that workspace. Standard and HiDPI modes are labeled; other modes show their rendering pixel size. Different rendering sizes remain separate options, even when both are HiDPI.
+- **Refresh rate** lists the rates available for that resolution and scaling. Fractional rates such as 59.94 Hz remain distinct from 60 Hz when macOS reports both. **Unspecified** means macOS did not report a rate.
+
+These choices prepare a change without applying it. Review the selected rendering pixels and aspect ratio before clicking **Preview changes**. The available combinations come from macOS; the app does not create missing modes.
+
+## Read the mode information
 
 | Term | Meaning |
 |---|---|
@@ -22,9 +32,10 @@ HiDPI rendering alone does not establish the physical panel's resolution or guar
 
 ## Preview a resolution
 
-1. Select a mode from **Resolution**, or use a HiDPI shortcut if one appears.
-2. Check text, circles, and the edges of the desktop. Look for stretch, cropping, or black borders.
-3. Click **Keep** within 15 seconds if the result looks correct. Click **Revert** to return immediately.
+1. Choose **Resolution**, **Scaling**, and **Refresh rate**, or use a HiDPI shortcut if one appears. Shortcuts also prepare the selection without applying it.
+2. Click **Preview changes** to try the selected mode.
+3. Check text, circles, and the edges of the desktop. Look for stretch, cropping, or black borders.
+4. Click **Keep** within 15 seconds if the result looks correct. Click **Revert** to return immediately.
 
 If you do nothing, Monitor Bar requests the previous mode after 15 seconds. It also verifies that macOS actually applied the requested mode. A kept selection lasts for the **current login session**; it is not a startup resolution preset.
 
@@ -32,13 +43,13 @@ If the display stays blank after the timer, open macOS Displays from another scr
 
 ## Why some modes are in details only
 
-macOS can return duplicates and modes unsuitable for normal desktop use. The picker deduplicates equivalent entries and offers valid, safe modes that are desktop-usable or marked native. Stretched, interlaced, hidden, and other unsuitable entries are excluded from normal selection. The current mode remains visible even when it does not meet those rules.
+macOS can return duplicates and modes unsuitable for normal desktop use. The controls deduplicate equivalent entries and offer valid, safe modes that are desktop-usable or marked native. Different rendering sizes and reported refresh rates remain available. Stretched, interlaced, hidden, and other unsuitable entries are excluded from normal selection. The current mode remains visible even when it does not meet those rules.
 
-**Show details → Monitor information → All reported modes** preserves the complete list, including flags and desktop-usability information. A mode appearing in diagnostics is not a recommendation to use it. The app does not generate or force extra modes that macOS did not return.
+**Monitor Settings → Information → Monitor information → All reported modes** preserves the complete list, including flags and desktop-usability information. A mode appearing in diagnostics is not a recommendation to use it. The app does not generate or force extra modes that macOS did not return.
 
 ## When the monitor and macOS disagree
 
-Monitor Bar compares the monitor's preferred EDID timing with the mode macOS marks native. If suitable HiDPI modes exist for both and they differ, the main card offers both previews. Neither reported value by itself proves the physical panel size.
+Monitor Bar compares the monitor's preferred EDID timing with the mode macOS marks native. If suitable HiDPI modes exist for both and they differ, the main card offers both as shortcuts. Select one, then click **Preview changes**. Neither reported value by itself proves the physical panel size.
 
 One tested generic display reported these conflicting sizes:
 

@@ -18,6 +18,18 @@ struct RenderPanel {
             }
             snapshot = first
         }
+        let settings = CommandLine.arguments.dropFirst(2).first == "settings"
+        let selection: DisplayModeInfo?
+        if CommandLine.arguments.count > 2 && !settings {
+            guard let id = Int32(CommandLine.arguments[2]),
+                  let mode = snapshot.display.modes.first(where: { $0.id == id && $0.isSelectable }) else {
+                throw NSError(domain: "MonitorPanelPreview", code: 4,
+                              userInfo: [NSLocalizedDescriptionKey: "The preview mode is not selectable in this report."])
+            }
+            selection = mode
+        } else {
+            selection = nil
+        }
 
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
@@ -29,8 +41,12 @@ struct RenderPanel {
         if snapshot.display.isSamsungG91SD {
             preferences.set(true, forKey: Hardware.samsungEnableKey(snapshot.display))
             preferences.set(true, forKey: Hardware.samsungPictureModeEnableKey(snapshot.display))
+            // Eye Saver is read as a prerequisite, but its write timing is not yet verified.
+            for feature in snapshot.features where [0x14, 0x2F].contains(feature.code) {
+                preferences.set(true, forKey: Hardware.samsungAdvancedEnableKey(snapshot.display, code: feature.code))
+            }
         }
-        let size = NSSize(width: 420, height: 560)
+        let size = settings ? NSSize(width: 760, height: 620) : NSSize(width: 420, height: 560)
         for (name, scheme, appearance) in [
             ("light", ColorScheme.light, NSAppearance.Name.aqua),
             ("dark", ColorScheme.dark, NSAppearance.Name.darkAqua)
@@ -39,7 +55,8 @@ struct RenderPanel {
             store.launchAtLogin = false
             let view = ZStack {
                 Color(nsColor: .windowBackgroundColor)
-                MonitorPanel(store: store)
+                if settings { MonitorSettingsView(store: store) }
+                else { MonitorPanel(store: store, previewSelection: selection) }
             }
             .frame(width: size.width, height: size.height)
             .environment(\.colorScheme, scheme)
@@ -72,7 +89,7 @@ struct RenderPanel {
                 throw NSError(domain: "MonitorPanelPreview", code: 3,
                               userInfo: [NSLocalizedDescriptionKey: "Could not encode the preview PNG."])
             }
-            let output = outputDirectory.appendingPathComponent("monitor-panel-\(name).png")
+            let output = outputDirectory.appendingPathComponent("monitor-\(settings ? "settings" : "panel")-\(name).png")
             try png.write(to: output, options: .atomic)
             print(output.path)
             window.close()

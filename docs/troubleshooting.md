@@ -37,15 +37,29 @@ Check the monitor's power-saving and picture settings first. On the tested Samsu
 
 ## Samsung G91SD hardware controls
 
-Version **0.1.2** includes Samsung support with individual verification required. Brightness, contrast, sharpness, RGB gains, and volume have been checked on one G91SD running firmware 1003.2 over direct HDMI. Picture Mode, Color Tone, and Black Equalizer require separate verification. The new Color Tone test covered **Warm 1 ↔ Warm 2**; Black Equalizer covered **5 ↔ 6**. Both were physically confirmed and restored, with other reported picture values unchanged. These small checks do not establish every preset or the full slider range.
+Version **0.1.3** includes Samsung support with individual verification required. Brightness, contrast, sharpness, RGB gains, and volume have been checked on one G91SD running firmware 1003.2 over direct HDMI. Picture Mode, Color Tone, and Black Equalizer require separate verification. All five Color Tone choices were physically confirmed, with Warm 1 restored after each test. Black Equalizer OSD values **0, 5, 6, and 10** were confirmed with a stable image. Intermediate levels and the direction of the visual change remain unverified. Other picture readbacks were unchanged immediately after each test change. Black Equalizer was returned to 5 after the endpoint checks. These checks do not establish behavior on other units, firmware, or input modes.
 
 The app enables this path only for an individually verified monitor saved in local preferences. Another G91SD does not inherit that verification. If the app has no verification record for your unit, hardware controls remain unavailable until the connection and individual controls have been checked. The Samsung must also be the Mac's only external display; the built-in screen can remain active. A Samsung connected alongside another external display disables hardware discovery for both, avoiding the generic EDID scan.
 
-There is no automatic verification or first-use enable button in v0.1.2. Resolution selection can still use the modes macOS provides. To help verify another unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with the monitor model, firmware, Mac, and connection details. Do not copy another unit's verification preferences as a substitute for testing.
+There is no automatic verification or first-use enable button in v0.1.3. Resolution selection can still use the modes macOS provides. To help verify another unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with the monitor model, firmware, Mac, and connection details. Do not copy another unit's verification preferences as a substitute for testing.
 
 For this path, Monitor Bar matches the HDMI service using cached macOS identity information. A refresh makes at most 12 reads with all verified controls enabled: the seven original sliders, PC/AV mode, Picture Mode, Eye Saver state, Color Tone, and Black Equalizer. Controls known to be locked are skipped. A slider commits when released: the app first checks that the current value still matches its starting value, then sends one write and one readback. A stale starting value is refused. Each operation uses one attempt with the verified packet format, without a capabilities request, alternate-format retries, or a deep scan. A transport failure or connection change pauses hardware commands. **Resume hardware controls** explicitly acknowledges the current HDMI connection; it is available only for a previously verified unit.
 
 The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, **0–100** for volume, and **0–10** for Black Equalizer, following the reported ranges. Sharpness, white balance, Color Tone, and Black Equalizer are under **Monitor Settings → Picture**. Custom calibration and software dimming are hidden for this path. RGB gains subtract 50 for display when the reported maximum is 100: raw 51 was confirmed as **+1** in the OSD. The full RGB range has not been calibrated, and these gains do not control the separate **Color** slider. Input switching, power commands, and other undocumented Samsung controls remain unavailable.
+
+## Saved presets are unavailable or stop partway
+
+Presets require verified Samsung controls, a readable PC Picture Mode, Eye Saver
+Off, and a separately verified PIP/PBP reader reporting Off. They are unavailable
+during another hardware operation, a resolution preview, or a hardware pause.
+Applying also requires every saved control and range to remain available on the
+same monitor.
+
+If a preset stops, earlier settings may already have changed. The app does not
+automatically roll back hardware values after a failure. Check the message and
+fresh readings, confirm the physical image is stable, and address the reported
+problem before resuming. Deleting or renaming a saved preset does not change the
+monitor. A preset-storage error leaves the existing saved data untouched.
 
 ## Samsung Eye Saver Mode
 

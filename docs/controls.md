@@ -25,6 +25,7 @@ window for additional controls:
 | Section | Controls |
 |---|---|
 | Picture | Sharpness, white balance, other supported hardware controls, and calibration; software dimming is available for monitors other than the Samsung |
+| Presets | Save, apply, rename, and delete hardware setups for an individually verified Samsung |
 | Information | Monitor details, hardware readback, reported modes, and diagnostic scans where supported |
 | App | Launch at login, pause/resume hardware controls, report export, and macOS Displays |
 
@@ -42,7 +43,7 @@ Keep/Revert controls are also available in the window.
 
 ## Resolution, scaling, and refresh rate
 
-Version 0.1.2 replaces the combined mode picker with separate **Resolution**, **Scaling**, and **Refresh rate** choices.
+The separate **Resolution**, **Scaling**, and **Refresh rate** choices were introduced in v0.1.2.
 
 Choose a workspace size, select a rendering option, then choose an available refresh rate. Standard and HiDPI modes are labeled; different rendering pixel sizes remain available under Scaling. Fractional refresh rates stay distinct. **Unspecified** means macOS did not report a rate.
 
@@ -56,21 +57,39 @@ These sliders use absolute target values. Rapid changes are combined into the la
 
 **Input source** and **Off / standby** ask for confirmation because they can disconnect the display. Keep access to the monitor's physical controls: a powered-down or switched-away monitor may stop responding to DDC and may need to be restored manually.
 
-Unknown feature codes and factory-reset commands are diagnostic-only. Version 0.1.2 does not offer an arbitrary DDC command console, saved settings presets, or automatic restoration of all hardware values.
+Unknown feature codes and factory-reset commands are diagnostic-only. The app does not offer an arbitrary DDC command console or automatic restoration of all hardware values.
 
-## Saved hardware presets — unreleased
+## Saved hardware presets
 
-Presets require PIP/PBP Off and a verified reader for that state. An unavailable
-state stops the operation before any preset is applied.
+Version 0.1.3 adds **Monitor Settings → Presets**. Presets belong to the selected
+Samsung and require individually verified controls, verified PC Picture Mode,
+and a verified PIP/PBP reader. PIP/PBP must be Off; an unavailable prerequisite
+stops the operation before a preset is applied.
 
-This work is in development and is **not included in v0.1.2**. It applies only
-to Samsung controls already verified for the selected unit.
+1. Adjust the monitor, then open **Presets → Save current…**.
+2. Enter a name and choose **Save**. The app reads the hardware again instead
+   of copying potentially stale slider values.
+3. Choose **Apply** beside a saved setup to recall it. The row's **…** menu
+   offers **Rename…** and **Delete…**. Deleting a preset only removes its saved data.
 
-Save a preset after setting the monitor as desired. Saving reads the hardware
-again instead of copying potentially stale slider values. Applying a preset
-sets Picture Mode and Color Tone first, then the saved numeric controls, and
-checks the final readings. Only currently verified controls can be included;
-Eye Saver, input switching, and power are excluded.
+Applying sets Picture Mode and Color Tone first, then saved numeric controls,
+and checks the final readings. Only currently verified controls can be included.
+Eye Saver, input switching, power, display modes, and software dimming are
+excluded. Presets stay in local app preferences and are applied manually;
+there is no automatic switching by application.
+
+On the tested unit, saving ten hardware values and applying an unchanged preset
+passed without setting writes. A separate preset changed Black Equalizer
+**5 → 6**, confirmed in the OSD with a stable image; the saved setup restored
+**5**, preserving the other picture readings and connection state.
+
+<figure class="panel-preview" style="max-width: 760px">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="{{ '/assets/samsung-presets-dark.png' | relative_url }}">
+    <img src="{{ '/assets/samsung-presets-light.png' | relative_url }}" alt="Monitor Settings Presets section with saved hardware setups" width="1520" height="1240">
+  </picture>
+  <figcaption>Offline preview using sample data. Saving a preset does not verify a new monitor.</figcaption>
+</figure>
 
 If an operation fails, the app stops. Settings already accepted by the monitor
 can remain changed; there is no automatic rollback. Check the reported failure
@@ -78,14 +97,14 @@ and the OSD before resuming hardware control.
 
 Input, PIP/PBP, and sound-source formats have been decoded and tested offline.
 Single hardware reads matched HDMI 1 and PIP/PBP support with the mode off.
-A source-assignment read returned **invalid reply**, so testing stopped and
-testing stopped before any input or layout changes. The user confirmed a stable
+A source-assignment read returned **invalid reply**, so testing stopped before
+any input or layout changes. The user confirmed a stable
 image, and verified picture controls were resumed. Audio was not queried. These controls remain unavailable. Transition verification needs a
 second connected, active source and a physical check of the monitor's behavior.
 
 ## Samsung G91SD controls
 
-Version 0.1.2 includes brightness, contrast, volume, sharpness, RGB white balance, Black Equalizer, Color Tone, and PC Picture Mode for an individually verified Samsung G91SD over direct HDMI. Hardware controls start disabled on a new installation; there is no first-use verification or enable workflow in this release. The Samsung must be the Mac's only external display, though the built-in screen can stay active. [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) explains the verification limit.
+Version 0.1.3 includes brightness, contrast, volume, sharpness, RGB white balance, Black Equalizer, Color Tone, and PC Picture Mode for an individually verified Samsung G91SD over direct HDMI. Hardware controls start disabled on a new installation; there is no first-use verification or enable workflow in this release. The Samsung must be the Mac's only external display, though the built-in screen can stay active. [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) explains the verification limit.
 
 <figure class="panel-preview" style="max-width: 420px">
   <picture>
@@ -97,7 +116,7 @@ Version 0.1.2 includes brightness, contrast, volume, sharpness, RGB white balanc
 
 The sliders use the monitor's OSD units: brightness and contrast **0–50**, sharpness **0–20**, volume **0–100**, and Black Equalizer **0–10**, following its reported ranges. Sharpness and white balance are under **Monitor Settings → Picture**. For RGB gains reporting a maximum of 100, the display subtracts 50: raw 51 was observed as **+1** in the OSD. This is not a full-range color calibration, and it does not change the separate OSD **Color** setting.
 
-**Color Tone** offers Cool, Standard, Warm 1, Warm 2, and Natural. Warm 1 ↔ Warm 2 and Black Equalizer 5 ↔ 6 were physically confirmed, then restored; other picture readbacks stayed unchanged. Testing has not covered every preset or the full Black Equalizer range. Each additional control requires its own local verification record. Samsung's Color Tone mapping is separate from generic color-temperature presets.
+**Color Tone** offers Cool, Standard, Warm 1, Warm 2, and Natural. All five choices were physically confirmed on the tested setup, with Warm 1 restored after each check. Black Equalizer OSD values **0, 5, 6, and 10** were confirmed with a stable image. Intermediate levels and the direction of the visual change remain unverified. Other picture readbacks were unchanged immediately after each test change. Black Equalizer was returned to 5 after the endpoint checks. This coverage does not apply to other units, firmware, or input modes. Each additional control requires its own local verification record. Samsung's Color Tone mapping is separate from generic color-temperature presets.
 
 **Eye Saver Mode** remains disabled while its delayed response is investigated. Its state is read before affected controls when an additional Samsung control is enabled. While Eye Saver is active or unavailable, brightness, Picture Mode, Color Tone, white balance, and Black Equalizer cannot be changed. See [Eye Saver timing]({{ '/troubleshooting/' | relative_url }}#samsung-eye-saver-mode) for the test result.
 

@@ -40,7 +40,9 @@ The app controls external displays through macOS display APIs and DDC/CI. A USB-
 
 Generic monitors use their advertised brightness and contrast ranges on a fresh installation. Custom calibration is **off by default**, and saved separately for each control and monitor. There is no universal setting for generic panels.
 
-Version **0.1.2** adds a separate **Monitor Settings** window and verified Samsung G91SD Color Tone and Black Equalizer controls alongside brightness, contrast, volume, sharpness, white balance, and PC Picture Mode. It requires local verification for the individual monitor and additional controls; the download does not automatically enable another G91SD. [Read the Samsung limits]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) before choosing it for that setup.
+Version **0.1.3** adds **Monitor Settings → Presets** to save and recall verified Samsung hardware settings. The window also has Picture, Information, and App sections. Presets read fresh values, apply them in order, and verify the result; a failure stops without automatic rollback. They require verified Picture Mode and PIP/PBP readers with PIP/PBP Off. [Learn how presets work]({{ '/controls/' | relative_url }}#saved-hardware-presets).
+
+Samsung controls still require local verification for the individual monitor and additional controls; the download does not automatically enable another G91SD. Input switching, PIP/PBP changes, and audio-source selection remain unavailable. [Read the Samsung limits]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) before choosing it for that setup.
 
 Open the gear button, then **Monitor Settings → App**, to pause all hardware commands. The pause survives a relaunch. Samsung connection or control failures also trigger it. Resume restarts hardware checks for ordinary monitors, or for a single, previously verified Samsung; a Samsung mixed with another external display remains blocked. Resolution selection and software dimming on other monitors remain available while hardware commands are paused.
 

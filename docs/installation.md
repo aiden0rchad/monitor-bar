@@ -23,7 +23,7 @@ The app has no Dock icon. Everyday controls open from the menu bar icon; the gea
 
 ### Samsung G91SD on a new installation
 
-The Samsung control code is included in v0.1.2, but hardware controls start disabled without a local verification record for the individual monitor. Matching the model is not enough, and the release does not include an automatic verification or first-use enable button. Picture Mode, Color Tone, and Black Equalizer each need separate verification. Picture Mode also needs the Mac input set to PC mode.
+The Samsung control code is included in v0.1.3, but hardware controls start disabled without a local verification record for the individual monitor. Matching the model is not enough, and the release does not include an automatic verification or first-use enable button. Picture Mode, Color Tone, and Black Equalizer each need separate verification. Picture Mode also needs the Mac input set to PC mode. Saved hardware presets additionally require a verified PIP/PBP reader with PIP/PBP Off; see [Presets]({{ '/controls/' | relative_url }}#saved-hardware-presets).
 
 Resolution selection remains available through macOS. If you want to help verify another Samsung unit, [open a compatibility report]({{ site.repository_url }}/issues/new/choose) with its model, firmware, Mac, and HDMI connection details. See [Samsung troubleshooting]({{ '/troubleshooting/' | relative_url }}#samsung-g91sd-hardware-controls) for the tested setup and current limits.
 

@@ -9,7 +9,7 @@ The controls on the back of a monitor are rarely its best feature. Monitor Bar p
 
 It's a small, free macOS app built with SwiftUI and AppKit. No account or subscription. The source is available under the [MIT license](LICENSE).
 
-**[Download v0.1.2](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.2)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**
+**[Download v0.1.3](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.3)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**
 
 Samsung G91SD hardware controls require individual verification and start disabled on a new installation. [See the current limits below](#samsung-odyssey-g91sd-over-hdmi).
 
@@ -22,7 +22,7 @@ Samsung G91SD hardware controls require individual verification and start disabl
 
 ## Install
 
-1. Download **Monitor-Bar-0.1.2-arm64.zip** from the [release page](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.2).
+1. Download **Monitor-Bar-0.1.3-arm64.zip** from the [release page](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.3).
 2. Unzip it and move **Monitor Bar.app** to Applications.
 3. Open it, then click the monitor icon in the menu bar. There isn't a Dock window to look for.
 
@@ -44,7 +44,7 @@ Run that from the folder containing both the ZIP and `SHA256SUMS`.
 - Offers separate brightness and contrast calibration for monitors with odd control ranges.
 - Separates Resolution, Scaling, and Refresh rate, using the modes macOS exposes.
 - Lets you prepare a display change before previewing it for 15 seconds. Keep it, or let it revert.
-- Opens a separate **Monitor Settings** window for supported picture controls, diagnostics, and app preferences.
+- Opens a separate **Monitor Settings** window for picture controls, saved Samsung presets, diagnostics, and app preferences.
 - Provides optional software dimming for monitors other than the Samsung.
 - Shows EDID and DDC details, and exports a local diagnostic report.
 - Pauses all hardware commands when requested, keeping that pause across launches.
@@ -54,13 +54,26 @@ Controls with missing or unusable replies stay unavailable. A valid reply is sti
 
 ## Samsung Odyssey G91SD over HDMI
 
-### In development
+### Saved hardware presets
 
-The next version adds saved hardware presets for individually verified Samsung
-controls. It reads fresh values when saving, applies Picture Mode and Color Tone
-before numeric adjustments, and checks the result. A failed operation stops
-without automatically rolling settings back. Eye Saver, input switching, and
-power settings are excluded. **These additions are not in the v0.1.2 download.**
+Version **0.1.3** adds **Monitor Settings → Presets** for individually verified
+Samsung controls. Choose **Save current…**, give the setup a name, then use
+**Apply** to recall it. Saving reads fresh hardware values. Applying sets Picture
+Mode and Color Tone before numeric adjustments, then checks the result.
+
+Presets require verified Picture Mode and PIP/PBP state readers, PC input mode,
+and PIP/PBP Off. A failed operation stops without automatically rolling settings
+back. Eye Saver, input, power, and display modes are excluded. Presets are saved
+locally for their monitor; automatic switching by application is not included.
+Saving, applying an unchanged preset, and a Black Equalizer **5 → 6 → 5**
+round trip were checked on the tested unit, including physical OSD confirmation.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/samsung-presets-dark.png">
+  <img src="docs/assets/samsung-presets-light.png" alt="Monitor Settings Presets section with named hardware settings and Apply buttons" width="760" height="620">
+</picture>
+
+*Offline preview using sample data. Saving a preset does not verify a new monitor.*
 
 Input switching, PIP/PBP, and sound-source formats have been decoded and tested
 offline. Single hardware reads identified HDMI 1 and PIP/PBP support with the
@@ -68,9 +81,9 @@ mode off. A PIP/PBP source read returned an invalid reply, so testing stopped
 before any input or layout changes. The user confirmed a stable image, and
 verified picture controls were resumed. Audio was not queried. Transition tests still need a second active source. See the [to-do list](TODO.md).
 
-### Available in v0.1.2
+### Hardware controls and verification
 
-Version **0.1.2** adds **Color Tone** and **Black Equalizer** to the individually verified G91SD controls. Brightness, contrast, volume, and PC **Picture Mode** stay in the popup. Sharpness, white balance, and the additional picture controls live in **Monitor Settings → Picture**. Testing used firmware 1003.2 and direct HDMI on an M3 Max Mac, with changes checked against the monitor's own menu. This is one tested setup, not a compatibility claim for every G91SD.
+Brightness, contrast, volume, and PC **Picture Mode** stay in the popup. Sharpness, white balance, Color Tone, and Black Equalizer live in **Monitor Settings → Picture**. Testing used firmware 1003.2 and direct HDMI on an M3 Max Mac, with changes checked against the monitor's own menu. This is one tested setup, not a compatibility claim for every G91SD.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/samsung-panel-dark.png">
@@ -92,7 +105,7 @@ Samsung sliders apply when released. Before writing, the app reads the current v
 
 The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, **0–100** for volume, and **0–10** for Black Equalizer, following the monitor's reported ranges. RGB gains under **Monitor Settings → Picture → White balance** subtract 50 for display when the reported maximum is 100: a raw reply of 51 was confirmed as **+1**. That observation is not a calibration of the full color range. The OSD's separate **Color** setting is not an RGB gain control.
 
-Color Tone **Warm 1 ↔ Warm 2** and Black Equalizer **5 ↔ 6** were physically confirmed and restored afterward. The five Color Tone choices match the OSD, but not every preset or Black Equalizer endpoint has been tested. Each additional control needs its own local verification. **Eye Saver remains disabled** while its delayed response is investigated; its state is still checked before affected controls can change.
+All five **Color Tone** choices have been physically confirmed, with Warm 1 restored after each test. Black Equalizer OSD values **0, 5, 6, and 10** were confirmed with a stable image. Intermediate levels and the direction of the visual change remain unverified. Other picture readbacks were unchanged immediately after each test change. Black Equalizer was returned to 5 after the endpoint checks. Verification does not cover other units, firmware, or input modes. Each additional control needs its own local verification. **Eye Saver remains disabled** while its delayed response is investigated; its state is still checked before affected controls can change.
 
 Picture Mode changes the monitor's hardware preset and can also change brightness, contrast, and color settings. The app refreshes its sliders afterward. The ten PC choices come from static analysis of Samsung's official Display Manager app and comparison with the OSD; direct HDMI tests have confirmed **Eco** and **Original**. See the [mode table and limits](https://aiden0rchad.github.io/monitor-bar/troubleshooting/#samsung-picture-mode).
 
@@ -117,7 +130,7 @@ Monitor Bar shows both numbers. It also compares the monitor's preferred timing 
 Separate **Resolution**, **Scaling**, and **Refresh rate** choices replace the long combined mode list. Select a workspace size, a rendering option, and a reported refresh rate, then click **Preview changes**. HiDPI shortcuts also prepare a selection before previewing. Use **Keep / Revert** within 15 seconds to finish the preview.
 
 Open the gear button or **Monitor settings…** in the popup for sharpness,
-white balance, monitor information, and app preferences. Closing that window
+white balance, saved presets, monitor information, and app preferences. Closing that window
 keeps Monitor Bar running in the menu bar.
 
 Only modes exposed by macOS are offered. There are no forced resolutions or system EDID overrides. See [HiDPI and resolutions](https://aiden0rchad.github.io/monitor-bar/hidpi/).

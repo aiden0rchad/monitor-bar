@@ -2,6 +2,11 @@
 
 The controls on the back of a monitor are rarely its best feature. Monitor Bar puts brightness, contrast, volume, and display modes in the Mac menu bar, where they're easier to reach.
 
+[![Release](https://img.shields.io/github/v/release/aiden0rchad/monitor-bar)](https://github.com/aiden0rchad/monitor-bar/releases/latest)
+[![CI](https://github.com/aiden0rchad/monitor-bar/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aiden0rchad/monitor-bar/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/aiden0rchad/monitor-bar)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-controls%20%26%20guides-2a78d6)](https://aiden0rchad.github.io/monitor-bar/)
+
 It's a small, free macOS app built with SwiftUI and AppKit. No account or subscription. The source is available under the [MIT license](LICENSE).
 
 **[Download v0.1.1](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.1)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**

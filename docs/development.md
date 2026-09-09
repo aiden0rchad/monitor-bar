@@ -19,16 +19,77 @@ The build creates an ad-hoc-signed app and a command-line probe. It does not not
 
 ## Source layout
 
+Version 0.1.3 includes saved hardware presets and strict input-protocol codecs.
+The codecs alone do not enable input, PIP/PBP, or audio-source writes.
+
 | File | Responsibility |
 |---|---|
 | `Sources/MonitorBarApp.swift` | Menu bar scene, quick controls, staged display choices, mode preview, and settings-window lifecycle |
-| `Sources/MonitorSettingsView.swift` | Picture controls, calibration, monitor information, diagnostics, and app preferences |
-| `Sources/MonitorStore.swift` | Observable app state, saved ranges, queued writes, readback handling, dimming, and mode changes |
+| `Sources/MonitorSettingsView.swift` | Picture controls, presets, calibration, monitor information, diagnostics, and app preferences |
+| `Sources/MonitorStore.swift` | Observable app state, saved presets/ranges, queued writes, readback handling, dimming, and mode changes |
 | `Sources/AbsoluteSlider.swift` | Native AppKit slider bridge with absolute-value actions and keyboard behavior |
 | `Sources/Hardware.swift` | Display discovery, unique DDC matching, feature probing, capability parsing, and write verification |
 | `Sources/DDCBridge.c` and `.h` | IOAVService access, DDC packet framing, checksums, and response statuses |
 | `Sources/Models.swift` | Display and control models, HiDPI detection, safe mode filtering, and writable-control lists |
 | `Sources/EDID.swift` | EDID parsing, preferred timings, extension information, and checksum validation |
+| `Sources/SamsungInputState.swift` | Pure, strict input/PIP/PBP/audio codecs; no hardware traffic or enablement |
+| `Sources/HardwarePreset.swift` | Validated per-monitor preset data and local persistence |
+
+## Samsung presets and verification in v0.1.3
+
+Additional Color Tone verification covered Cool (`0`), Standard (`1`), and
+Natural (`4`). Each supervised change used 27 Get requests and one Set, followed
+by physical OSD confirmation; Warm 1 was restored after each test. Combined
+with the earlier Warm 2 check, all five choices are physically confirmed on
+the tested G91SD setup. Other picture readbacks and the connection identity,
+5120 × 1440 at 144 Hz, and AC-power state remained unchanged. This does not
+establish behavior on other units, firmware, or input modes.
+
+Saved hardware presets are limited to the selected, individually verified
+Samsung unit. Saving takes fresh readings. Applying orders Picture Mode and
+Color Tone before numeric controls, then verifies the final values. The same
+per-unit, per-control, connection, and unavailable-state guards still apply.
+Failure stops the operation without an automatic rollback; a partially applied
+preset may leave accepted settings changed. Eye Saver, input, and power values
+are excluded.
+
+Presets also require the separate `samsungPIPReadEnabled` verification record
+for that monitor. A preset snapshot adds one `0xE2` read before the existing
+picture scan (at most 13 reads). It accepts the observed type `0` and maximum
+`127`, then decodes the packed current value; `0x3500` is valid even though
+it exceeds the maximum field. PIP/PBP must be Off. Enabled units also check
+this state before each write. Normal refresh stays at its existing limit.
+No source-assignment or audio queries are dependencies of picture controls.
+
+An on-device store check saved ten fresh hardware values as **Current setup**,
+then reapplied that unchanged preset. Across three production preset snapshots,
+PIP/PBP remained Off and the writer was never invoked. Existing presets were
+preserved, and picture values and connection state were unchanged. A subsequent
+`MonitorStore.applyHardwarePreset` check changed Black Equalizer from 5 to 6;
+the user confirmed 6 and a stable image. Applying **Current setup** restored 5.
+Each direction used at most 30 Get requests and one Set. Other picture readings
+and connection state were unchanged, with the requested brightness of 15 kept.
+The final round-trip audit matched the saved setup.
+
+The input codecs cover `0x60`, packed PIP/PBP status `0xE2`, two-screen source
+assignments `0xE3`, and main/sub audio `0xE8`. They reject unknown inputs,
+reserved fields, unsupported three-source formats, and inconsistent active
+states. DDC type and maximum are not assumed to define a continuous range.
+These are static mappings recovered from Samsung Display Manager and tested
+offline, not verified G91SD write controls. A fresh 12-query baseline matched
+the original picture settings. Three separate, single-attempt reads followed:
+
+| Code | Result | Interpretation |
+|---|---|---|
+| `0xE2` | `ok`, current `0x3500`, maximum `127`, type `0` | PIP/PBP supported, off; three two-screen PBP layouts and two PIP sizes reported |
+| `0x60` | `ok`, current `17`, maximum `18`, type `0` | HDMI 1 on this connection; the cause of the earlier different reply is unknown |
+| `0xE3` | `invalid reply`, I/O return `0` | Not a valid source value or unsupported-feature response |
+
+The invalid reply triggered a persistent pause before `0xE8` or any Set request.
+Passive connection identity, 144 Hz mode, and AC-power state remained unchanged;
+the user confirmed physical stability and authorized resuming verified picture controls. Input/PIP/audio transition
+verification needs a second active source and recovery when the Mac loses DDC
+access. No input, PIP/PBP, or audio-source writes have been tested.
 
 ## Run the checks
 
@@ -81,7 +142,7 @@ Samsung Display Manager's PC Picture Mode map is: 0 Entertain, 1 Graphic, 2 Eco,
 
 A Picture Mode write checks PC input again, reads the current mode and rejects stale state, sends at most one `0x2D` SetVCP, then reads `0x2D` once to confirm. No automatic retry or restoration occurs. The feature remains gated per unit; the map recovered from Samsung's app does not establish that every mode is available in every monitor configuration. Picture presets may also change brightness, contrast, and color settings.
 
-Color Tone (`0x14`) and Black Equalizer (`0x2F`) have separate strict per-unit opt-ins keyed as `samsungAdvancedEnabled.<display.identity>.<HEX_CODE>`. Both default off. Color Tone uses Samsung's categorical map: 0 Cool, 1 Standard, 2 Warm 1, 3 Warm 2, 4 Natural. It is not the generic MCCS color-temperature map. Black Equalizer uses the unit's validated 0–10 raw range. Physical verification covered Warm 1 ↔ Warm 2 and Black Equalizer 5 ↔ 6, followed by restoration; it did not cover every setting.
+Color Tone (`0x14`) and Black Equalizer (`0x2F`) have separate strict per-unit opt-ins keyed as `samsungAdvancedEnabled.<display.identity>.<HEX_CODE>`. Both default off. Color Tone uses Samsung's categorical map: 0 Cool, 1 Standard, 2 Warm 1, 3 Warm 2, 4 Natural. It is not the generic MCCS color-temperature map. Black Equalizer uses the unit's validated 0–10 raw range. Physical verification covers all five Color Tone choices and Black Equalizer OSD values 0, 5, 6, and 10, including both reported endpoints. Immediately after each endpoint change, other picture readings, connection identity, 144 Hz mode, and AC-power state matched the baseline. The first 10 → 5 restoration stopped before any Set because a fresh snapshot detected a manual brightness change. After the user confirmed that change, a new baseline allowed restoration to 5 while preserving the requested brightness of 15. All other original readings and the connection matched. This verified a stale-value refusal without a malformed reply or transport failure. Intermediate levels and the direction of the visual change remain unverified, as do other units, firmware, and input modes.
 
 When an additional control is enabled, the scan first reads Eye Saver (`0x0A`). If its state is active or unusable, it skips affected brightness, RGB, Picture Mode, Color Tone, and Black Equalizer reads and marks those controls unavailable. It does not apply that restriction to contrast, sharpness, or volume. The maximum is 12 reads with all verified controls enabled: the seven base features, PC/AV, Picture Mode, Eye Saver, Color Tone, and Black Equalizer. Eye Saver's prerequisite reply stays in the snapshot even when its write control is disabled.
 
@@ -102,8 +163,8 @@ First save a suitable custom range in Monitor Bar, then quit the app and other D
 swiftc -target arm64-apple-macos13.0 -swift-version 5 \
     -import-objc-header Sources/DDCBridge.h \
     Sources/Models.swift Sources/EDID.swift Sources/Hardware.swift \
-    Sources/MonitorStore.swift Sources/AbsoluteSlider.swift \
-    Tests/DDCControlRange.swift .build/DDCBridge.o \
+    Sources/MonitorStore.swift Sources/HardwarePreset.swift Sources/SamsungInputState.swift \
+    Sources/AbsoluteSlider.swift Tests/DDCControlRange.swift .build/DDCBridge.o \
     -framework IOKit -framework AppKit -framework ServiceManagement \
     -framework UniformTypeIdentifiers -o .build/ddc-control-range
 .build/monitor-probe --modes

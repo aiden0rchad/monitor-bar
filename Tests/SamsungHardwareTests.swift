@@ -77,6 +77,67 @@ private final class Transport {
         // Explicit resume clears the previous identity, permitting a fresh validation.
         precondition(Hardware.validateSamsungConnection(previous: nil, current: changed, pause: pauseConnection))
 
+        let pipKey = Hardware.samsungPIPReadEnableKey(display)
+        precondition(!Hardware.canUseSamsungPIPRead(display, preferences: preferences))
+        for invalid: Any in ["true", 1, false] {
+            preferences.set(invalid, forKey: pipKey)
+            precondition(!Hardware.canUseSamsungPIPRead(display, preferences: preferences))
+        }
+        preferences.set(true, forKey: pipKey)
+        precondition(Hardware.canUseSamsungPIPRead(display, preferences: preferences))
+        preferences.set(false, forKey: key)
+        precondition(!Hardware.canUseSamsungPIPRead(display, preferences: preferences))
+        preferences.set(true, forKey: key)
+        let pipOff = Transport.reply(13568, maximum: 127)
+        let pipOn = Transport.reply(13569, maximum: 127)
+        let pipReader = Transport()
+        pipReader.replies = [pipOff]
+        let pipFeature = pipReader.session.pipFeature()
+        precondition(Hardware.isValidSamsungPIPFeature(pipFeature) && pipFeature.current > pipFeature.maximum)
+        precondition(SamsungPIPState(rawValue: pipFeature.current)?.isOn == false && !pipFeature.isSlider)
+        precondition(pipReader.reads == [0xE2] && pipReader.writes.isEmpty)
+        let pipScan = Transport()
+        pipScan.replies = [pipOff]
+        precondition(pipScan.session.scan(requirePIPOff: true).count == 8)
+        precondition(pipScan.reads == [0xE2] + Hardware.samsungControlCodes && pipScan.writes.isEmpty)
+        for reply in [pipOn, Transport.reply(0x8000, maximum: 127),
+                      Transport.reply(13568, maximum: 100), Transport.reply(13568, maximum: 127, type: 1),
+                      Transport.reply(0, maximum: 127, status: DDC_UNSUPPORTED)] {
+            let stopped = Transport()
+            stopped.replies = [reply]
+            let result = stopped.session.scan(includePictureMode: true, requirePIPOff: true, advancedCodes: [0x14, 0x2F])
+            precondition(result.count == 1 && result[0].code == 0xE2)
+            precondition(stopped.reads == [0xE2] && stopped.writes.isEmpty && !stopped.paused)
+            let brightness = Transport()
+            brightness.replies = [reply]
+            precondition(brightness.session.write(feature: feature(), value: 26, guardPIP: true).1.contains("PIP/PBP"))
+            precondition(brightness.reads == [0xE2] && brightness.writes.isEmpty)
+            let picture = Transport()
+            picture.replies = [reply]
+            _ = picture.session.writePictureMode(feature: VCPFeature(code: 0x2D, current: 2, maximum: 10, type: 0, status: "ok"),
+                                                 value: 8, guardPIP: true)
+            precondition(picture.reads == [0xE2] && picture.writes.isEmpty)
+            let tone = Transport()
+            tone.replies = [reply]
+            _ = tone.session.writeAdvanced(feature: VCPFeature(code: 0x14, current: 2, maximum: 4, type: 0, status: "ok"),
+                                           value: 3, guardPIP: true)
+            precondition(tone.reads == [0xE2] && tone.writes.isEmpty)
+        }
+        let pipWrite = Transport()
+        pipWrite.replies = [pipOff, Transport.reply(25), Transport.reply(26)]
+        precondition(pipWrite.session.write(feature: feature(), value: 26, guardPIP: true).0?.current == 26)
+        precondition(pipWrite.reads == [0xE2, 0x10, 0x10] && pipWrite.writes.count == 1)
+        let pipFault = Transport()
+        pipFault.replies = [Transport.reply(0, status: DDC_TRANSPORT)]
+        _ = pipFault.session.write(feature: feature(), value: 26, guardPIP: true)
+        precondition(pipFault.reads == [0xE2] && pipFault.writes.isEmpty && pipFault.paused)
+        let pipPaused = Transport()
+        pipPaused.paused = true
+        precondition(pipPaused.session.scan(requirePIPOff: true).isEmpty)
+        _ = pipPaused.session.write(feature: feature(), value: 26, guardPIP: true)
+        precondition(pipPaused.reads.isEmpty && pipPaused.writes.isEmpty)
+        print("Samsung PIP/PBP opt-in, encoded state, Off prerequisite, and request budgets passed")
+
         let scan = Transport()
         precondition(scan.session.scan().count == 7)
         precondition(scan.reads == [0x10, 0x12, 0x87, 0x16, 0x18, 0x1A, 0x62])

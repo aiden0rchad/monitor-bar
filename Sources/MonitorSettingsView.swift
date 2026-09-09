@@ -7,13 +7,18 @@ struct MonitorSettingsView: View {
     @State private var section: SettingsSection = .picture
     @State private var diagnosticsExpanded = true
     @State private var modesExpanded = false
+    @State private var presetEditorIsPresented = false
+    @State private var editingPreset: HardwarePreset?
+    @State private var presetName = ""
+    @State private var deletingPreset: HardwarePreset?
 
     private enum SettingsSection: String, CaseIterable, Identifiable {
-        case picture = "Picture", information = "Information", app = "App"
+        case picture = "Picture", presets = "Presets", information = "Information", app = "App"
         var id: Self { self }
         var icon: String {
             switch self {
             case .picture: return "slider.horizontal.3"
+            case .presets: return "bookmark"
             case .information: return "info.circle"
             case .app: return "gearshape"
             }
@@ -21,10 +26,16 @@ struct MonitorSettingsView: View {
         var subtitle: String {
             switch self {
             case .picture: return "Fine-tune the image on your monitor."
+            case .presets: return "Save hardware settings for this monitor."
             case .information: return "Display modes, hardware replies, and connection details."
             case .app: return "Startup and hardware control preferences."
             }
         }
+    }
+
+    init(store: MonitorStore, previewPresets: Bool = false) {
+        self.store = store
+        _section = State(initialValue: previewPresets ? .presets : .picture)
     }
 
     private var advancedControls: [(UInt8, String)] {
@@ -68,6 +79,7 @@ struct MonitorSettingsView: View {
                         case .picture:
                             if store.selected != nil { pictureControls.id(store.selected?.identity) }
                             else { Text("Connect an external monitor, then refresh.").foregroundStyle(.secondary) }
+                        case .presets: presetControls
                         case .information:
                             if store.selected != nil { diagnostics }
                             else { Text("No external display is connected.").foregroundStyle(.secondary) }
@@ -85,6 +97,109 @@ struct MonitorSettingsView: View {
         .onAppear {
             if store.lastScan == nil && !store.busy { store.refresh() }
         }
+        .onChange(of: store.selected?.identity) { _ in
+            presetEditorIsPresented = false
+            editingPreset = nil
+            deletingPreset = nil
+        }
+        .sheet(isPresented: $presetEditorIsPresented) { presetEditor }
+        .alert("Delete preset?", isPresented: Binding(
+            get: { deletingPreset != nil }, set: { if !$0 { deletingPreset = nil } }), presenting: deletingPreset) { preset in
+            Button("Delete", role: .destructive) { store.deleteHardwarePreset(preset) }
+            Button("Cancel", role: .cancel) {}
+        } message: { preset in
+            Text("Delete “\(preset.name)” from your saved presets? Your monitor’s settings stay unchanged.")
+        }
+    }
+
+    private var presetControls: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            if store.usesSamsungControls {
+                if let error = store.presetStorageError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                HStack(alignment: .top) {
+                    Text("Save the monitor’s current picture and volume settings, then restore them together.")
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 12)
+                    Button("Save current…") {
+                        editingPreset = nil
+                        presetName = ""
+                        presetEditorIsPresented = true
+                    }
+                    .disabled(!store.canSaveHardwarePreset)
+                }
+                let presets = store.savedPresets.filter { $0.displayIdentity == store.selected?.identity }
+                if presets.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "bookmark").font(.system(size: 28, weight: .light))
+                        Text("No saved presets").font(.headline)
+                        Text("Set up the image you like, then save it here.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 26)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(presets) { preset in
+                            GroupBox {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(preset.name).font(.headline).lineLimit(2)
+                                        Text("\(preset.values.count) hardware settings")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 10)
+                                    Button("Apply") { store.applyHardwarePreset(preset) }
+                                        .disabled(!store.canApplyHardwarePreset(preset))
+                                        .accessibilityLabel("Apply \(preset.name)")
+                                    Menu {
+                                        Button("Rename…") {
+                                            editingPreset = preset
+                                            presetName = preset.name
+                                            presetEditorIsPresented = true
+                                        }
+                                        Button("Delete…", role: .destructive) { deletingPreset = preset }
+                                    } label: { Image(systemName: "ellipsis") }
+                                    .menuStyle(.borderlessButton).fixedSize()
+                                    .disabled(store.busy || store.writing || store.pendingMode)
+                                    .accessibilityLabel("Manage \(preset.name)")
+                                }
+                                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+                Text("Each preset belongs to this monitor. Only verified controls are saved; display resolution and connection settings stay separate.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Label("Hardware presets are available for verified Samsung G91SD controls.", systemImage: "info.circle")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var presetEditor: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(editingPreset == nil ? "Save current settings" : "Rename preset").font(.headline)
+            TextField("Preset name", text: $presetName)
+                .textFieldStyle(.roundedBorder)
+            Text(editingPreset == nil ? "Monitor Bar reads the current hardware values before saving." : "Choose a name with up to 64 characters.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Cancel") { presetEditorIsPresented = false }.keyboardShortcut(.cancelAction)
+                Button(editingPreset == nil ? "Save" : "Rename") {
+                    if let preset = editingPreset { store.renameHardwarePreset(preset, to: presetName) }
+                    else { store.saveHardwarePreset(named: presetName) }
+                    presetEditorIsPresented = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(HardwarePreset.normalizedName(presetName) == nil || store.busy || store.writing || store.pendingMode
+                          || (editingPreset == nil && !store.canSaveHardwarePreset))
+            }
+        }
+        .padding(24).frame(width: 360)
     }
 
     private var displayHeader: some View {

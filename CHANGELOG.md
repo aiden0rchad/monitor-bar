@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.1.3 — 2026-09-09
+
+Save named hardware setups for a verified Samsung monitor and apply them from
+the new Presets section. Input-switching research remains read-only.
+
+- Physically confirm the remaining Samsung Color Tone choices: Cool, Standard,
+  and Natural, restoring Warm 1 after each check. All five choices now have
+  physical confirmation on the tested G91SD setup, with other reported picture
+  settings unchanged. Other units, firmware, and input modes remain unverified.
+- Confirm Black Equalizer OSD values 0 and 10 with a stable image, extending the
+  earlier 5/6 checks to both reported endpoints. Other picture readings and the
+  connection were unchanged immediately after each change; Black Equalizer was
+  restored to 5 while preserving a user-requested brightness change. Intermediate
+  levels and the direction of the visual change remain unverified.
+- Add saved hardware presets for individually verified Samsung controls. Save
+  fresh hardware readings, apply Picture Mode and Color Tone before numeric
+  values, and verify the final result. Stop on failure without automatic rollback.
+  Eye Saver, input, and power controls are excluded.
+- Verify saving ten current hardware values and applying the unchanged preset
+  without setting writes. A subsequent preset changed Black Equalizer 5 → 6,
+  with physical confirmation, then restored 5 through the saved setup. Other
+  readings, the connection, and existing presets were preserved.
+- Require a separately verified PIP/PBP reader for presets. Check that PIP/PBP
+  is Off before reading a preset and before writes on enabled units; leave
+  ordinary refresh unchanged.
+- Decode Samsung input, PIP/PBP, and sound-source formats with offline tests that
+  reject unknown and reserved values. Single reads matched HDMI 1 and PIP/PBP
+  support while off. An invalid source-assignment reply stopped testing before
+  audio queries or writes; it is not classified as an unsupported-feature reply.
+  Input, split-screen, and audio-source writes remain unverified and disabled.
+
 ## 0.1.2 — 2026-09-09
 
 A smaller popup for everyday adjustments, a separate settings window, and

@@ -4,7 +4,7 @@ description: Separate workspace size, rendering pixels, and aspect ratio when ch
 permalink: /hidpi/
 ---
 
-Version 0.1.2 separates display-mode selection into resolution, scaling, and refresh rate. You can prepare a combination before previewing it.
+Introduced in v0.1.2, separate resolution, scaling, and refresh-rate choices let you prepare a display mode before previewing it.
 
 ## Choose resolution, scaling, and refresh rate
 

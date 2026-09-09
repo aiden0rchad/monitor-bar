@@ -17,12 +17,22 @@ struct DisplayModeInfo: Identifiable, Codable, Hashable {
     var isNative: Bool { ioFlags & 0x02000000 != 0 }
     var isSelectable: Bool {
         width > 0 && height > 0 && pixelWidth > 0 && pixelHeight > 0 &&
+        refreshRate.isFinite && refreshRate >= 0 &&
         ioFlags & 3 == 3 && ioFlags & (0x80 | 0x800 | 0x1000 | 0x40) == 0 &&
         (isDesktopUsable || isNative)
     }
     var aspectLabel: String { Self.aspect(width: width, height: height) }
     var pixelLabel: String { "\(pixelWidth) × \(pixelHeight) pixels" }
     var scaleLabel: String { isHiDPI ? String(format: "%.3g× HiDPI", Double(pixelWidth) / Double(width)) : "Standard 1×" }
+    var resolution: DisplaySize { DisplaySize(width: width, height: height) }
+    var renderingSize: DisplaySize { DisplaySize(width: pixelWidth, height: pixelHeight) }
+    var scalingChoiceLabel: String {
+        renderingSize == resolution ? "Standard" : (isHiDPI ? scaleLabel : renderingSize.label + " pixels")
+    }
+    var refreshLabel: String {
+        guard refreshRate.isFinite, refreshRate > 0 else { return "Unspecified" }
+        return refreshRate.formatted(.number.precision(.fractionLength(0...3))) + " Hz"
+    }
     static func aspect(width: Int, height: Int) -> String {
         guard width > 0 && height > 0 else { return "Unknown aspect" }
         if abs(Double(width) / Double(height) - 1.6) < 0.002 { return "16:10" }
@@ -33,6 +43,84 @@ struct DisplayModeInfo: Identifiable, Codable, Hashable {
     var label: String {
         "\(width) × \(height) · \(scaleLabel)" +
         (refreshRate > 0 ? String(format: " · %.2f Hz", refreshRate) : "")
+    }
+}
+
+struct DisplaySize: Hashable {
+    let width: Int
+    let height: Int
+    var label: String { "\(width) × \(height)" }
+}
+
+/// Menus describe existing modes; choosing a field never constructs a new timing.
+struct DisplayModeOptions {
+    let display: DisplayInfo
+    var availableModes: [DisplayModeInfo] { display.modes.filter(\.isSelectable) }
+    private var visibleModes: [DisplayModeInfo] {
+        display.modes.filter { $0.isSelectable || $0.id == display.currentModeID }
+    }
+    var resolutions: [DisplaySize] {
+        Set(visibleModes.map(\.resolution)).sorted {
+            $0.width == $1.width ? $0.height > $1.height : $0.width > $1.width
+        }
+    }
+    func renderingSizes(for resolution: DisplaySize) -> [DisplaySize] {
+        Set(visibleModes.filter { $0.resolution == resolution }.map(\.renderingSize)).sorted {
+            $0.width == $1.width ? $0.height < $1.height : $0.width < $1.width
+        }
+    }
+    func refreshModes(for mode: DisplayModeInfo) -> [DisplayModeInfo] {
+        let matches = visibleModes.filter {
+            $0.resolution == mode.resolution && $0.renderingSize == mode.renderingSize &&
+            $0.refreshRate.isFinite && $0.refreshRate >= 0
+        }
+        return Set(matches.map(\.refreshRate)).sorted(by: >).compactMap { rate in
+            preferredMode(resolution: mode.resolution, rendering: mode.renderingSize, rate: rate, near: mode)
+                ?? matches.first { $0.id == display.currentModeID && $0.refreshRate == rate }
+        }
+    }
+    func refreshLabel(for mode: DisplayModeInfo) -> String {
+        let sameLabel = refreshModes(for: mode).filter { $0.refreshLabel == mode.refreshLabel }
+        return sameLabel.count > 1 ? "\(mode.refreshRate) Hz" : mode.refreshLabel
+    }
+    func scalingLabel(for mode: DisplayModeInfo) -> String {
+        let sameLabel = visibleModes.filter {
+            $0.resolution == mode.resolution && $0.scalingChoiceLabel == mode.scalingChoiceLabel
+        }
+        return Set(sameLabel.map(\.renderingSize)).count > 1
+            ? "\(mode.scalingChoiceLabel) · \(mode.renderingSize.label)" : mode.scalingChoiceLabel
+    }
+    func preferredMode(resolution: DisplaySize, rendering: DisplaySize? = nil,
+                       rate: Double? = nil, near reference: DisplayModeInfo) -> DisplayModeInfo? {
+        let candidates = availableModes.filter {
+            $0.resolution == resolution && (rendering == nil || $0.renderingSize == rendering) &&
+            (rate == nil || $0.refreshRate == rate)
+        }
+        // Preserve scaling and refresh rate where possible. Keep the selected or
+        // active ID when macOS returns several flag variants of the same mode.
+        return candidates.min { lhs, rhs in
+            let leftScale = scaleDistance(lhs, reference), rightScale = scaleDistance(rhs, reference)
+            if leftScale != rightScale { return leftScale < rightScale }
+            let leftRate = rateDistance(lhs.refreshRate, reference.refreshRate)
+            let rightRate = rateDistance(rhs.refreshRate, reference.refreshRate)
+            if leftRate != rightRate { return leftRate < rightRate }
+            if (lhs.id == reference.id) != (rhs.id == reference.id) { return lhs.id == reference.id }
+            if (lhs.id == display.currentModeID) != (rhs.id == display.currentModeID) { return lhs.id == display.currentModeID }
+            if lhs.isNative != rhs.isNative { return lhs.isNative }
+            if lhs.refreshRate != rhs.refreshRate { return lhs.refreshRate > rhs.refreshRate }
+            return lhs.id < rhs.id
+        }
+    }
+    private func scaleDistance(_ mode: DisplayModeInfo, _ reference: DisplayModeInfo) -> Double {
+        guard reference.width > 0, reference.height > 0 else { return 0 }
+        return abs(Double(mode.pixelWidth) / Double(mode.width) - Double(reference.pixelWidth) / Double(reference.width)) +
+            abs(Double(mode.pixelHeight) / Double(mode.height) - Double(reference.pixelHeight) / Double(reference.height))
+    }
+    private func rateDistance(_ rate: Double, _ reference: Double) -> Double {
+        if rate == reference { return 0 }
+        // A missing rate is not 0 Hz and should not win a closest-rate comparison.
+        guard rate > 0, reference.isFinite, reference > 0 else { return .infinity }
+        return abs(rate - reference)
     }
 }
 

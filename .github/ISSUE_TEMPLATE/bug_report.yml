@@ -5,7 +5,7 @@ body:
     id: version
     attributes:
       label: App and macOS versions
-      placeholder: Monitor Bar 0.1.0, macOS 26.5
+      placeholder: Monitor Bar 0.1.2, macOS 26.5
     validations:
       required: true
   - type: textarea

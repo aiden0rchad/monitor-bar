@@ -9,7 +9,7 @@ The controls on the back of a monitor are rarely its best feature. Monitor Bar p
 
 It's a small, free macOS app built with SwiftUI and AppKit. No account or subscription. The source is available under the [MIT license](LICENSE).
 
-**[Download v0.1.1](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.1)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**
+**[Download v0.1.2](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.2)** · **[Documentation](https://aiden0rchad.github.io/monitor-bar/)** · **[Report a problem](https://github.com/aiden0rchad/monitor-bar/issues/new/choose)**
 
 Samsung G91SD hardware controls require individual verification and start disabled on a new installation. [See the current limits below](#samsung-odyssey-g91sd-over-hdmi).
 
@@ -22,7 +22,7 @@ Samsung G91SD hardware controls require individual verification and start disabl
 
 ## Install
 
-1. Download **Monitor-Bar-0.1.1-arm64.zip** from the [release page](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.1).
+1. Download **Monitor-Bar-0.1.2-arm64.zip** from the [release page](https://github.com/aiden0rchad/monitor-bar/releases/tag/v0.1.2).
 2. Unzip it and move **Monitor Bar.app** to Applications.
 3. Open it, then click the monitor icon in the menu bar. There isn't a Dock window to look for.
 
@@ -42,23 +42,28 @@ Run that from the folder containing both the ZIP and `SHA256SUMS`.
 
 - Adjusts hardware brightness, contrast, and volume when the monitor supports them.
 - Offers separate brightness and contrast calibration for monitors with odd control ranges.
-- Lists the modes macOS exposes, with HiDPI labels, refresh rates, rendering pixels, and aspect ratios.
-- Previews a resolution change for 15 seconds. Keep it, or let it revert.
-- Exposes supported color settings, inputs, and standby under **More controls**.
-- Provides software dimming when you want to darken the image further.
+- Separates Resolution, Scaling, and Refresh rate, using the modes macOS exposes.
+- Lets you prepare a display change before previewing it for 15 seconds. Keep it, or let it revert.
+- Opens a separate **Monitor Settings** window for supported picture controls, diagnostics, and app preferences.
+- Provides optional software dimming for monitors other than the Samsung.
 - Shows EDID and DDC details, and exports a local diagnostic report.
 - Pauses all hardware commands when requested, keeping that pause across launches.
-- Can launch at login. Use the gear menu to turn that on.
+- Can launch at login. Enable it under **Monitor Settings → App**.
 
 Controls with missing or unusable replies stay unavailable. A valid reply is still only a candidate for control: it does not guarantee that the monitor will handle adjustments safely. If the screen flashes or disconnects, quit the app and use the monitor's physical controls.
 
 ## Samsung Odyssey G91SD over HDMI
 
-Version **0.1.1** adds seven hardware sliders for an individually verified G91SD: brightness, contrast, sharpness, red gain, green gain, blue gain, and volume. It also offers a **Picture Mode** picker for a separately verified unit in PC mode. Testing used firmware 1003.2 and direct HDMI on an M3 Max Mac, with changes checked against the monitor's own menu. This is one tested setup, not a compatibility claim for every G91SD.
+Version **0.1.2** adds **Color Tone** and **Black Equalizer** to the individually verified G91SD controls. Brightness, contrast, volume, and PC **Picture Mode** stay in the popup. Sharpness, white balance, and the additional picture controls live in **Monitor Settings → Picture**. Testing used firmware 1003.2 and direct HDMI on an M3 Max Mac, with changes checked against the monitor's own menu. This is one tested setup, not a compatibility claim for every G91SD.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/samsung-panel-dark.png">
-  <img src="docs/assets/samsung-panel-light.png" alt="Example Samsung panel with brightness, contrast, sharpness, volume, Picture Mode, and resolution controls" width="420">
+  <img src="docs/assets/samsung-panel-light.png" alt="Example Samsung panel with brightness, contrast, volume, Picture Mode, and separate display-mode choices" width="420">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/samsung-settings-dark.png">
+  <img src="docs/assets/samsung-settings-light.png" alt="Monitor Settings window with Samsung picture controls and white balance" width="760" height="620">
 </picture>
 
 *Offline preview using sample Samsung data. Hardware controls require local verification.*
@@ -67,9 +72,11 @@ Enablement is saved locally for the individual monitor after verification. A mat
 
 There is no automatic verification or first-use enable button in this release. On a new installation, the Samsung's hardware controls remain unavailable while macOS resolution selection still works. To help test another unit, [open a compatibility report](https://github.com/aiden0rchad/monitor-bar/issues/new/choose) with the model, firmware, Mac, and connection details.
 
-Samsung sliders apply when released. Before writing, the app reads the current value and refuses the change if it no longer matches the slider's starting value. It then sends one write and one readback, using the verified DDC packet format without retries. A refresh reads at most nine values: the seven slider controls, PC/AV mode, and Picture Mode. The app matches the HDMI service using cached macOS identity information, without a capabilities request or deep scan. A transport failure or connection change pauses further hardware commands until an explicit resume.
+Samsung sliders apply when released. Before writing, the app reads the current value and refuses the change if it no longer matches the slider's starting value. It then sends one write and one readback, using the verified DDC packet format without retries. A refresh makes at most 12 reads with all verified controls enabled, including Eye Saver as a prerequisite check. Controls known to be locked are skipped. The app matches the HDMI service using cached macOS identity information, without a capabilities request or deep scan. A transport failure or connection change pauses further hardware commands until an explicit resume.
 
-The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, and **0–100** for volume, following the monitor's reported ranges. RGB gains under **More controls** subtract 50 for display when the reported maximum is 100: a raw reply of 51 was confirmed as **+1**. That observation is not a calibration of the full color range. The OSD's separate **Color** setting is not an RGB gain control.
+The sliders use OSD units: **0–50** for brightness and contrast, **0–20** for sharpness, **0–100** for volume, and **0–10** for Black Equalizer, following the monitor's reported ranges. RGB gains under **Monitor Settings → Picture → White balance** subtract 50 for display when the reported maximum is 100: a raw reply of 51 was confirmed as **+1**. That observation is not a calibration of the full color range. The OSD's separate **Color** setting is not an RGB gain control.
+
+Color Tone **Warm 1 ↔ Warm 2** and Black Equalizer **5 ↔ 6** were physically confirmed and restored afterward. The five Color Tone choices match the OSD, but not every preset or Black Equalizer endpoint has been tested. Each additional control needs its own local verification. **Eye Saver remains disabled** while its delayed response is investigated; its state is still checked before affected controls can change.
 
 Picture Mode changes the monitor's hardware preset and can also change brightness, contrast, and color settings. The app refreshes its sliders afterward. The ten PC choices come from static analysis of Samsung's official Display Manager app and comparison with the OSD; direct HDMI tests have confirmed **Eco** and **Original**. See the [mode table and limits](https://aiden0rchad.github.io/monitor-bar/troubleshooting/#samsung-picture-mode).
 
@@ -81,7 +88,7 @@ This project started with a generic USB-C display that reported a normal 0–100
 
 The working brightness range on that screen was roughly **0–25**. Calibration maps the full slider onto that smaller range. Contrast has an independent calibration for the same kind of problem.
 
-Open **More controls → Brightness calibration** or **Contrast calibration**, enable **Use custom range**, and set the maximum hardware value. A maximum of 25 gives 26 hardware levels, shown in roughly 4% steps. If the control starts reversing near the top, lower the endpoint a little.
+Open **Monitor Settings → Picture → Calibration**, choose brightness or contrast, enable **Use custom range**, and set the maximum hardware value. A maximum of 25 gives 26 hardware levels, shown in roughly 4% steps. If the control starts reversing near the top, lower the endpoint a little.
 
 **On other monitors, fresh installs use the advertised range.** The value 25 is an example from one display, not a preset applied to every monitor. Calibration is saved separately for each control and monitor. The Samsung controls above use OSD units and hide these custom-range controls. [The controls guide](https://aiden0rchad.github.io/monitor-bar/controls/) covers the details.
 
@@ -90,6 +97,12 @@ Open **More controls → Brightness calibration** or **Contrast calibration**, e
 A HiDPI mode separates the size of your workspace from the number of pixels used to draw it. For example, a 1280 × 800 workspace can render at 2560 × 1600 for sharper text.
 
 Monitor Bar shows both numbers. It also compares the monitor's preferred timing with the mode macOS marks as native, because those can disagree on generic displays. When they do, try the available HiDPI options and keep the one with sharp text and correct proportions.
+
+Separate **Resolution**, **Scaling**, and **Refresh rate** choices replace the long combined mode list. Select a workspace size, a rendering option, and a reported refresh rate, then click **Preview changes**. HiDPI shortcuts also prepare a selection before previewing. Use **Keep / Revert** within 15 seconds to finish the preview.
+
+Open the gear button or **Monitor settings…** in the popup for sharpness,
+white balance, monitor information, and app preferences. Closing that window
+keeps Monitor Bar running in the menu bar.
 
 Only modes exposed by macOS are offered. There are no forced resolutions or system EDID overrides. See [HiDPI and resolutions](https://aiden0rchad.github.io/monitor-bar/hidpi/).
 

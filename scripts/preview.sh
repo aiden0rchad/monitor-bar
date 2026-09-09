@@ -19,4 +19,4 @@ swiftc -target arm64-apple-macos13.0 -swift-version 5 -O -import-objc-header Sou
     "${sources[@]}" .build/PreviewUI.swift scripts/RenderPanel.swift \
     .build/DDCBridge-preview.o -framework IOKit -framework AppKit \
     -framework ServiceManagement -framework UniformTypeIdentifiers -o .build/render-panel
-.build/render-panel "$report"
+.build/render-panel "$report" "${@:2}"

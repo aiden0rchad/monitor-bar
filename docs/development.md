@@ -21,7 +21,8 @@ The build creates an ad-hoc-signed app and a command-line probe. It does not not
 
 | File | Responsibility |
 |---|---|
-| `Sources/MonitorBarApp.swift` | Menu bar scene, control popover, calibration interface, mode preview, and diagnostics |
+| `Sources/MonitorBarApp.swift` | Menu bar scene, quick controls, staged display choices, mode preview, and settings-window lifecycle |
+| `Sources/MonitorSettingsView.swift` | Picture controls, calibration, monitor information, diagnostics, and app preferences |
 | `Sources/MonitorStore.swift` | Observable app state, saved ranges, queued writes, readback handling, dimming, and mode changes |
 | `Sources/AbsoluteSlider.swift` | Native AppKit slider bridge with absolute-value actions and keyboard behavior |
 | `Sources/Hardware.swift` | Display discovery, unique DDC matching, feature probing, capability parsing, and write verification |
@@ -35,7 +36,7 @@ The build creates an ad-hoc-signed app and a command-line probe. It does not not
 ./scripts/test.sh
 ```
 
-The automated suite checks DDC response framing, checksums and statuses; EDID parsing; capability parsing; display-mode filtering; writable-control restrictions; absolute slider actions; custom range mapping; rapid changes; and delayed or failed readbacks. Samsung tests also cover connection identity changes, strict per-unit opt-ins, PC/AV gating, categorical Picture Mode values, and request limits. These tests do not change hardware settings.
+The automated suite checks DDC response framing, checksums and statuses; EDID parsing; capability parsing; display-mode grouping and filtering; writable-control restrictions; absolute slider actions; custom range mapping; rapid changes; and delayed or failed readbacks. Samsung tests also cover connection identity changes, strict per-unit opt-ins, PC/AV and Eye Saver prerequisites, categorical choices, and request limits. These tests do not change hardware settings.
 
 Hardware integration checks are separate and opt-in. They require an explicitly selected display and a saved custom range. Numeric readback verifies command mapping, not measured luminance or contrast.
 
@@ -72,13 +73,21 @@ Keep reports local unless you have reviewed and redacted identifying data. Gener
 
 Samsung G91SD controls require a verified per-unit opt-in, the Samsung as the only external display, and a uniquely matching cached HDMI connection. Discovery reads cached EDID and registry properties, without requesting EDID or capabilities from the monitor. The app checks the proxy, HDMI port, connection counter, UUID, and EDID around every I2C operation. A changed connection or failed confirmation persists a global hardware pause. Explicit resume acknowledges a new connection before rescanning.
 
-The base scan reads only brightness, contrast, sharpness, RGB, and volume: seven profile-0 GetVCP exchanges without retries. Ordinary writes pre-read the control, reject stale values, send at most one SetVCP, and verify once.
+Without additional control opt-ins, the base scan reads brightness, contrast, sharpness, RGB, and volume: seven profile-0 GetVCP exchanges without retries. Ordinary writes pre-read the control, reject stale values, send at most one SetVCP, and verify once.
 
-Picture Mode has a separate strict boolean opt-in, `samsungPictureModeEnabled.<display.identity>`, in addition to the base hardware opt-in. It defaults off. An opted-in scan reads PC/AV (`0xE4`) after the seven controls, then Picture Mode (`0x2D`) only for a valid PC response. The scan therefore uses at most nine reads and exposes at most eight controls. An AV or unsupported response disables Picture Mode while retaining the base controls; transport or malformed-response failures pause all hardware controls.
+Picture Mode has a separate strict boolean opt-in, `samsungPictureModeEnabled.<display.identity>`, in addition to the base hardware opt-in. It defaults off. With this opt-in alone, a scan reads PC/AV (`0xE4`) after the seven controls, then Picture Mode (`0x2D`) only for a valid PC response: at most nine reads. An AV or unsupported response disables Picture Mode while retaining the base controls; transport or malformed-response failures pause all hardware controls.
 
 Samsung Display Manager's PC Picture Mode map is: 0 Entertain, 1 Graphic, 2 Eco, 3 Game Standard, 4 RPG, 5 RTS, 6 FPS, 7 Sports, 8 Original, and 9 Custom. The mode is categorical. A reported maximum of 10 does not make PC value 10 valid. The app requires type 0, maximum 10, and a current value in this PC map. The PC/AV maximum is not interpreted as a continuous range.
 
 A Picture Mode write checks PC input again, reads the current mode and rejects stale state, sends at most one `0x2D` SetVCP, then reads `0x2D` once to confirm. No automatic retry or restoration occurs. The feature remains gated per unit; the map recovered from Samsung's app does not establish that every mode is available in every monitor configuration. Picture presets may also change brightness, contrast, and color settings.
+
+Color Tone (`0x14`) and Black Equalizer (`0x2F`) have separate strict per-unit opt-ins keyed as `samsungAdvancedEnabled.<display.identity>.<HEX_CODE>`. Both default off. Color Tone uses Samsung's categorical map: 0 Cool, 1 Standard, 2 Warm 1, 3 Warm 2, 4 Natural. It is not the generic MCCS color-temperature map. Black Equalizer uses the unit's validated 0–10 raw range. Physical verification covered Warm 1 ↔ Warm 2 and Black Equalizer 5 ↔ 6, followed by restoration; it did not cover every setting.
+
+When an additional control is enabled, the scan first reads Eye Saver (`0x0A`). If its state is active or unusable, it skips affected brightness, RGB, Picture Mode, Color Tone, and Black Equalizer reads and marks those controls unavailable. It does not apply that restriction to contrast, sharpness, or volume. The maximum is 12 reads with all verified controls enabled: the seven base features, PC/AV, Picture Mode, Eye Saver, Color Tone, and Black Equalizer. Eye Saver's prerequisite reply stays in the snapshot even when its write control is disabled.
+
+Affected writes recheck Eye Saver before the current target value. Presets run serially and refresh related settings before another write is accepted. An explicit unsupported reply or a valid but unusable value disables the feature; transport, framing, and connection failures pause hardware commands. A numeric readback still needs a physical check when verifying a new control.
+
+Eye Saver writes remain unverified and disabled. Off → Low was not confirmed by either a 150 ms or a 1.5-second readback interval. A later read after the first attempt reported Low without another Set. The user restored Off through the OSD after the final test, and fresh readings matched the original settings. These results do not establish a reliable settling time or justify retrying automatically.
 
 ## Opt-in hardware range check
 
@@ -126,6 +135,26 @@ The default preview uses the synthetic fixture in `Tests/Fixtures/demo-monitor.j
 
 It writes light and dark images to `.build/preview/` without taking a screen capture or sending hardware commands. These renders check layout, not live menu bar interaction or physical monitor behavior. The documentation's example images use this demo data.
 
+The display controls can also be rendered with a staged selection.
+Pass a selectable mode ID from the fixture to show the **Preview changes** footer:
+
+```sh
+./scripts/preview.sh Tests/Fixtures/samsung-monitor.json 2
+```
+
+This only changes the offline preview; it does not apply a display mode.
+
+Render the separate settings window with synthetic advanced-control values:
+
+```sh
+./scripts/preview.sh Tests/Fixtures/samsung-advanced-monitor.json settings
+```
+
+This writes `monitor-settings-light.png` and `monitor-settings-dark.png`. The
+fixture enables controls only in an isolated preview preference suite; it
+does not enable or change a connected monitor. Use `demo-monitor.json` to check
+the generic monitor's calibration and software-dimming layout.
+
 To preview your own monitor, close other DDC utilities and create a report first:
 
 ```sh
@@ -158,7 +187,7 @@ Custom brightness and contrast limits are stored in local preferences, keyed by 
 
 Exported JSON may include monitor serials, display IDs, registry paths, EDID data, DDC capabilities, and raw settings. You choose the save location. The app does not transmit that file; sharing it is a separate action you control.
 
-This documentation and release downloads are hosted by GitHub, whose services have their own privacy practices. The site adds no tracking scripts or third-party assets.
+This documentation and release downloads are hosted by GitHub, whose services have their own privacy practices. The site adds no tracking scripts. Its support button loads an image from Buy Me a Coffee and links to that service.
 
 ## Implementation boundaries
 

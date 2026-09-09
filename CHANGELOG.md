@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.2 — 2026-09-09
+
+A smaller popup for everyday adjustments, a separate settings window, and
+clearer display-mode choices. Samsung Color Tone and Black Equalizer join the
+controls checked on the individually verified G91SD.
+
+- Add a separate Monitor Settings window with Picture, Information, and App
+  sections. Move sharpness, white balance, calibration, and diagnostics out of
+  the quick popup; share the selected display and operation state between views.
+- Add individually gated Samsung Eye Saver Mode, Color Tone, and Black Equalizer
+  implementations. Color Tone (Warm 1 ↔ Warm 2) and Black Equalizer (5 ↔ 6)
+  passed physical checks on the tested unit and were restored. Eye Saver
+  writes remain disabled: neither a 150 ms nor a 1.5-second readback reliably
+  confirmed the change. A later read after the first attempt reported Low,
+  and the user restored Off through the OSD after the final test. Fresh readings
+  matched the original settings afterward.
+- Check Eye Saver before affected controls, serialize picture presets, and
+  refresh related settings after a preset. No additional queries run without
+  an advanced-control verification record.
+- Split display-mode selection into Resolution, Scaling, and Refresh rate.
+  List each workspace size once while preserving different rendering pixel sizes
+  and exact reported refresh rates, including an Unspecified option when needed.
+- Stage selections and HiDPI shortcuts until **Preview changes** is clicked.
+  Keep the existing 15-second Keep/Revert preview before retaining a mode.
+- Recheck the current display and mode before applying a preview. Verify display
+  identity before Keep or Revert so a reconnected display is not mistaken for
+  the original target.
+- Stage and sign the app in a temporary directory outside the workspace, avoiding
+  signing failures when File Provider restores Finder attributes during a build.
+
 ## 0.1.1 — 2026-09-09
 
 Adds guarded HDMI control for an individually verified Samsung G91SD and a

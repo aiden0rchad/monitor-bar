@@ -34,6 +34,7 @@ enum Hardware {
     private static let samsungLock = NSLock()
 
     static func samsungEnableKey(_ display: DisplayInfo) -> String { "samsungHardwareEnabled.\(display.identity)" }
+    static func samsungPIPReadEnableKey(_ display: DisplayInfo) -> String { "samsungPIPReadEnabled.\(display.identity)" }
     static func samsungPictureModeEnableKey(_ display: DisplayInfo) -> String { "samsungPictureModeEnabled.\(display.identity)" }
     static func samsungAdvancedEnableKey(_ display: DisplayInfo, code: UInt8) -> String {
         "samsungAdvancedEnabled.\(display.identity)." + String(format: "%02X", code)
@@ -52,6 +53,18 @@ enum Hardware {
               let value = preferences.object(forKey: samsungPictureModeEnableKey(display)) as? NSNumber,
               CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
         return value.boolValue
+    }
+
+    static func canUseSamsungPIPRead(_ display: DisplayInfo, preferences: UserDefaults = commandPreferences) -> Bool {
+        guard canUseSamsungControls(display, preferences: preferences),
+              let value = preferences.object(forKey: samsungPIPReadEnableKey(display)) as? NSNumber,
+              CFGetTypeID(value) == CFBooleanGetTypeID() else { return false }
+        return value.boolValue
+    }
+
+    static func isValidSamsungPIPFeature(_ feature: VCPFeature) -> Bool {
+        feature.code == 0xE2 && feature.isReadable && feature.type == 0 && feature.maximum == 127
+            && SamsungPIPState(rawValue: feature.current) != nil
     }
 
     static func isValidSamsungPictureMode(_ feature: VCPFeature) -> Bool {
@@ -261,13 +274,27 @@ enum Hardware {
                        isPaused: { hardwareCommandsPaused }, pause: { pauseAfterFault($0) })
     }
 
-    private static func probeSamsung(_ display: DisplayInfo, progress: ((Int) -> Void)?) -> MonitorProbe {
+    static func probeForPreset(_ display: DisplayInfo) -> MonitorProbe {
+        guard display.isSamsungG91SD, canUseSamsungPIPRead(display) else {
+            var result = MonitorProbe(display: display)
+            result.note = "Presets require a verified PIP/PBP state reader for this Samsung display."
+            return result
+        }
+        return probeSamsung(display, requirePIPOff: true, progress: nil)
+    }
+
+    private static func probeSamsung(_ display: DisplayInfo, requirePIPOff: Bool = false,
+                                     progress: ((Int) -> Void)?) -> MonitorProbe {
         samsungLock.lock()
         defer { samsungLock.unlock() }
         var result = MonitorProbe(display: display)
         guard !hardwareCommandsPaused else { result.note = pauseReason() ?? pauseMessage; return result }
         guard canUseSamsungControls(display) else {
             result.note = "Hardware controls have not been verified and enabled for this Samsung display."
+            return result
+        }
+        guard !requirePIPOff || canUseSamsungPIPRead(display) else {
+            result.note = "PIP/PBP state reading is not enabled for this monitor."
             return result
         }
         let cached = cachedSamsungConnection(display)
@@ -291,11 +318,17 @@ enum Hardware {
         }
         let session = samsungSession(handle)
         result.features = session.scan(includePictureMode: canUseSamsungPictureMode(display),
+                                       requirePIPOff: requirePIPOff,
                                        advancedCodes: samsungAdvancedControlCodes.filter { canUseSamsungAdvancedControl(display, code: $0) },
                                        progress: progress)
         if hardwareCommandsPaused || session.fault != nil {
             result.features = []
             result.note = pauseReason() ?? session.fault ?? pauseMessage
+            return result
+        }
+        if requirePIPOff,
+           !result.features.contains(where: { isValidSamsungPIPFeature($0) && SamsungPIPState(rawValue: $0.current)?.isOn == false }) {
+            result.note = "Presets require PIP/PBP Off with a valid hardware reply. No picture controls were read."
             return result
         }
         samsungConnections[display.identity] = connection
@@ -333,9 +366,10 @@ enum Hardware {
         guard DDCGuardHDMIConnection(handle, &connection) == 1 else { return (nil, pauseReason() ?? pauseMessage) }
         let session = samsungSession(handle)
         let guardEyeSaver = samsungAdvancedControlCodes.contains { canUseSamsungAdvancedControl(display, code: $0) }
-        if pictureMode { return session.writePictureMode(feature: feature, value: value, guardEyeSaver: guardEyeSaver) }
-        if advanced { return session.writeAdvanced(feature: feature, value: value) }
-        return session.write(feature: feature, value: value, guardEyeSaver: guardEyeSaver)
+        let guardPIP = canUseSamsungPIPRead(display)
+        if pictureMode { return session.writePictureMode(feature: feature, value: value, guardEyeSaver: guardEyeSaver, guardPIP: guardPIP) }
+        if advanced { return session.writeAdvanced(feature: feature, value: value, guardPIP: guardPIP) }
+        return session.write(feature: feature, value: value, guardEyeSaver: guardEyeSaver, guardPIP: guardPIP)
     }
 
     // Injected operations keep the complete Samsung request budget testable offline.
@@ -379,6 +413,24 @@ enum Hardware {
             return result
         }
 
+        func pipFeature() -> VCPFeature {
+            var result = readFeature(0xE2)
+            if result.isReadable && !isValidSamsungPIPFeature(result) { result.status = "unavailable" }
+            return result
+        }
+
+        private func pipOff() -> Bool {
+            let pip = pipFeature()
+            return isValidSamsungPIPFeature(pip) && SamsungPIPState(rawValue: pip.current)?.isOn == false
+        }
+
+        private func pipBlocked(_ original: VCPFeature) -> (VCPFeature?, String) {
+            guard !isPaused(), fault == nil else { return (nil, fault ?? pauseReason() ?? pauseMessage) }
+            var unavailable = original
+            unavailable.status = "unavailable"
+            return (unavailable, "PIP/PBP must be Off with a valid hardware reply; nothing was written.")
+        }
+
         private func readFeature(_ code: UInt8) -> VCPFeature {
             var result = VCPFeature(code: code, current: 0, maximum: 0, type: 0, status: "paused")
             guard !isPaused(), fault == nil else { return result }
@@ -412,7 +464,7 @@ enum Hardware {
             return isValidSamsungAdvancedControl(eye) && eye.current == 0
         }
 
-        func scan(includePictureMode: Bool = false, advancedCodes: [UInt8] = [],
+        func scan(includePictureMode: Bool = false, requirePIPOff: Bool = false, advancedCodes: [UInt8] = [],
                   progress: ((Int) -> Void)? = nil) -> [VCPFeature] {
             var features: [VCPFeature] = []
             let advanced = samsungAdvancedControlCodes.filter { advancedCodes.contains($0) }
@@ -420,6 +472,13 @@ enum Hardware {
             func didRead() { completed += 1; progress?(completed) }
             func unavailable(_ code: UInt8) -> VCPFeature {
                 VCPFeature(code: code, current: 0, maximum: 0, type: 0, status: "unavailable")
+            }
+            if requirePIPOff {
+                let pip = pipFeature()
+                didRead()
+                guard !isPaused(), fault == nil else { return [] }
+                features.append(pip)
+                guard isValidSamsungPIPFeature(pip), SamsungPIPState(rawValue: pip.current)?.isOn == false else { return features }
             }
             var eye: VCPFeature?
             if !advanced.isEmpty {
@@ -467,10 +526,11 @@ enum Hardware {
         }
 
         func writePictureMode(feature original: VCPFeature, value: UInt16,
-                              guardEyeSaver: Bool = false) -> (VCPFeature?, String) {
+                              guardEyeSaver: Bool = false, guardPIP: Bool = false) -> (VCPFeature?, String) {
             guard isValidSamsungPictureMode(original), value <= 9 else {
                 return (nil, "This Samsung Picture Mode has not been validated for PC input.")
             }
+            if guardPIP && !pipOff() { return pipBlocked(original) }
             if guardEyeSaver && !eyeSaverOff() { return eyeSaverBlocked(original) }
             guard pcInputAvailable() else {
                 if isPaused() || fault != nil { return (nil, fault ?? pauseReason() ?? pauseMessage) }
@@ -513,16 +573,17 @@ enum Hardware {
             return (unavailable, "\(original.name) requires Eye Saver Off. Its current availability could not be confirmed; nothing was written.")
         }
 
-        func write(feature original: VCPFeature, value: UInt16, guardEyeSaver: Bool = false) -> (VCPFeature?, String) {
-            writeChecked(feature: original, value: value, advanced: false, guardEyeSaver: guardEyeSaver)
+        func write(feature original: VCPFeature, value: UInt16, guardEyeSaver: Bool = false,
+                   guardPIP: Bool = false) -> (VCPFeature?, String) {
+            writeChecked(feature: original, value: value, advanced: false, guardEyeSaver: guardEyeSaver, guardPIP: guardPIP)
         }
 
-        func writeAdvanced(feature original: VCPFeature, value: UInt16) -> (VCPFeature?, String) {
-            writeChecked(feature: original, value: value, advanced: true, guardEyeSaver: true)
+        func writeAdvanced(feature original: VCPFeature, value: UInt16, guardPIP: Bool = false) -> (VCPFeature?, String) {
+            writeChecked(feature: original, value: value, advanced: true, guardEyeSaver: true, guardPIP: guardPIP)
         }
 
         private func writeChecked(feature original: VCPFeature, value: UInt16, advanced: Bool,
-                                  guardEyeSaver: Bool) -> (VCPFeature?, String) {
+                                  guardEyeSaver: Bool, guardPIP: Bool) -> (VCPFeature?, String) {
             func valid(_ feature: VCPFeature) -> Bool {
                 advanced ? isValidSamsungAdvancedControl(feature) && isValidSamsungAdvancedValue(code: feature.code, value: value)
                     : samsungControlCodes.contains(feature.code) && feature.isSlider && value <= feature.maximum
@@ -530,6 +591,7 @@ enum Hardware {
             guard valid(original) else {
                 return (nil, "This Samsung control or value is not supported.")
             }
+            if guardPIP && !pipOff() { return pipBlocked(original) }
             if guardEyeSaver && samsungEyeSaverAffectedCodes.contains(original.code) && !eyeSaverOff() {
                 return eyeSaverBlocked(original)
             }

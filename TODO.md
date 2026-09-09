@@ -3,6 +3,10 @@
 The next additions focus on controlling the monitor itself over HDMI. Checked
 items are included in v0.1.2; unchecked items need further research or verification.
 
+Unreleased work includes saved hardware presets for verified Samsung controls
+and offline-tested input/PIP/PBP/audio codecs. The v0.1.2 download does not
+include those additions; hardware transition testing remains open below.
+
 ## Samsung G91SD: start here
 
 Target: **LS49DG910SNXZA, firmware 1003.2**. Samsung Display Manager's Mac app
@@ -39,10 +43,19 @@ These need connection and recovery checks as well as an OSD confirmation.
 
 - [ ] **Input switching** (`0x60`): map the physical inputs and test what happens
   to control access when switching away from the Mac, including switching back.
-- [ ] **PIP/PBP** (`0xE2`, `0xE3`): decode the complete commands for modes,
-  sources, layout, size, and position. Check available resolutions and refresh
-  rates after each change and restore the normal single-input setup.
-- [ ] **Sound source** (`0xE8`): select which computer supplies audio in PIP/PBP.
+  One fresh read returned HDMI 1 (`17`), matching SDM's map on the current
+  connection. The cause of the earlier different value is unknown. No switch
+  command has been tested.
+- [ ] **PIP/PBP** (`0xE2`, `0xE3`): verify the decoded status, mode, layout,
+  size, position, and source commands against the physical OSD. Check available
+  resolutions and refresh rates after each change and restore the normal
+  single-input setup. One `0xE2` read reported PIP and PBP support with the mode
+  off. One `0xE3` read returned **invalid reply**, causing a persistent pause;
+  that is not a valid unsupported-feature response. No PIP/PBP writes were sent.
+- [ ] **Sound source** (`0xE8`): verify the decoded main/sub audio selection
+  with both sources connected and producing distinguishable sound. No mixing
+  is documented. Audio was not queried after the `0xE3` failure. Input/PIP/audio
+  transition testing needs a second connected, active source.
 - [ ] **Adaptive-Sync** (`0xF2`): decode its type/status handling, verify the
   toggle, and check link stability and interaction with PIP/PBP.
 
@@ -61,8 +74,11 @@ These need connection and recovery checks as well as an OSD confirmation.
 
 ## Once the controls are verified
 
-- [ ] Add saved hardware presets and optional per-application Picture Mode
-  switching using verified commands.
+- [ ] Finish supervised saved-preset verification and release it. The unreleased
+  Samsung implementation saves fresh readings, applies presets in dependency
+  order, and checks the result. It excludes Eye Saver, input, and power and does
+  not automatically roll back a partial failure.
+- [ ] Add optional per-application Picture Mode switching using verified commands.
 - [ ] For each new control, save fresh original values, make one bounded
   change, compare readback with the physical OSD, and restore the originals.
   Check affected settings too. Keep connection checks, command limits, and

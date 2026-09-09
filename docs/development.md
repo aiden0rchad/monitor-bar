@@ -19,6 +19,9 @@ The build creates an ad-hoc-signed app and a command-line probe. It does not not
 
 ## Source layout
 
+The source includes unreleased saved-preset and input-protocol work described
+below. The latest published binary remains v0.1.2.
+
 | File | Responsibility |
 |---|---|
 | `Sources/MonitorBarApp.swift` | Menu bar scene, quick controls, staged display choices, mode preview, and settings-window lifecycle |
@@ -29,6 +32,45 @@ The build creates an ad-hoc-signed app and a command-line probe. It does not not
 | `Sources/DDCBridge.c` and `.h` | IOAVService access, DDC packet framing, checksums, and response statuses |
 | `Sources/Models.swift` | Display and control models, HiDPI detection, safe mode filtering, and writable-control lists |
 | `Sources/EDID.swift` | EDID parsing, preferred timings, extension information, and checksum validation |
+| `Sources/SamsungInputState.swift` | Pure, strict input/PIP/PBP/audio codecs; no hardware traffic or enablement |
+
+## Unreleased Samsung work
+
+Saved hardware presets are limited to the selected, individually verified
+Samsung unit. Saving takes fresh readings. Applying orders Picture Mode and
+Color Tone before numeric controls, then verifies the final values. The same
+per-unit, per-control, connection, and unavailable-state guards still apply.
+Failure stops the operation without an automatic rollback; a partially applied
+preset may leave accepted settings changed. Eye Saver, input, and power values
+are excluded.
+
+Presets also require the separate `samsungPIPReadEnabled` verification record
+for that monitor. A preset snapshot adds one `0xE2` read before the existing
+picture scan (at most 13 reads). It accepts the observed type `0` and maximum
+`127`, then decodes the packed current value; `0x3500` is valid even though
+it exceeds the maximum field. PIP/PBP must be Off. Enabled units also check
+this state before each write. Normal refresh stays at its existing limit.
+No source-assignment or audio queries are dependencies of picture controls.
+
+The input codecs cover `0x60`, packed PIP/PBP status `0xE2`, two-screen source
+assignments `0xE3`, and main/sub audio `0xE8`. They reject unknown inputs,
+reserved fields, unsupported three-source formats, and inconsistent active
+states. DDC type and maximum are not assumed to define a continuous range.
+These are static mappings recovered from Samsung Display Manager and tested
+offline, not verified G91SD write controls. A fresh 12-query baseline matched
+the original picture settings. Three separate, single-attempt reads followed:
+
+| Code | Result | Interpretation |
+|---|---|---|
+| `0xE2` | `ok`, current `0x3500`, maximum `127`, type `0` | PIP/PBP supported, off; three two-screen PBP layouts and two PIP sizes reported |
+| `0x60` | `ok`, current `17`, maximum `18`, type `0` | HDMI 1 on this connection; the cause of the earlier different reply is unknown |
+| `0xE3` | `invalid reply`, I/O return `0` | Not a valid source value or unsupported-feature response |
+
+The invalid reply triggered a persistent pause before `0xE8` or any Set request.
+Passive connection identity, 144 Hz mode, and AC-power state remained unchanged;
+the user confirmed physical stability and authorized resuming verified picture controls. Input/PIP/audio transition
+verification needs a second active source and recovery when the Mac loses DDC
+access. No input, PIP/PBP, or audio-source writes have been tested.
 
 ## Run the checks
 

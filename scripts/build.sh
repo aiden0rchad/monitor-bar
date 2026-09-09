@@ -19,7 +19,7 @@ xcrun swiftc -target "$target" -swift-version 5 -O -import-objc-header Sources/D
     Sources/*.swift .build/DDCBridge.o -framework IOKit -framework AppKit \
     -framework ServiceManagement -o "$app/Contents/MacOS/MonitorBar"
 xcrun swiftc -target "$target" -swift-version 5 -O -import-objc-header Sources/DDCBridge.h \
-    Sources/Models.swift Sources/EDID.swift Sources/Hardware.swift scripts/Probe.swift \
+    Sources/Models.swift Sources/EDID.swift Sources/SamsungInputState.swift Sources/Hardware.swift scripts/Probe.swift \
     .build/DDCBridge.o -framework IOKit -framework AppKit -o .build/monitor-probe
 cp Resources/Info.plist "$app/Contents/Info.plist"
 mkdir -p "$app/Contents/Resources"

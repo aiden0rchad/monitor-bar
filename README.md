@@ -54,6 +54,22 @@ Controls with missing or unusable replies stay unavailable. A valid reply is sti
 
 ## Samsung Odyssey G91SD over HDMI
 
+### In development
+
+The next version adds saved hardware presets for individually verified Samsung
+controls. It reads fresh values when saving, applies Picture Mode and Color Tone
+before numeric adjustments, and checks the result. A failed operation stops
+without automatically rolling settings back. Eye Saver, input switching, and
+power settings are excluded. **These additions are not in the v0.1.2 download.**
+
+Input switching, PIP/PBP, and sound-source formats have been decoded and tested
+offline. Single hardware reads identified HDMI 1 and PIP/PBP support with the
+mode off. A PIP/PBP source read returned an invalid reply, so testing stopped
+before any input or layout changes. The user confirmed a stable image, and
+verified picture controls were resumed. Audio was not queried. Transition tests still need a second active source. See the [to-do list](TODO.md).
+
+### Available in v0.1.2
+
 Version **0.1.2** adds **Color Tone** and **Black Equalizer** to the individually verified G91SD controls. Brightness, contrast, volume, and PC **Picture Mode** stay in the popup. Sharpness, white balance, and the additional picture controls live in **Monitor Settings → Picture**. Testing used firmware 1003.2 and direct HDMI on an M3 Max Mac, with changes checked against the monitor's own menu. This is one tested setup, not a compatibility claim for every G91SD.
 
 <picture>

@@ -56,7 +56,32 @@ These sliders use absolute target values. Rapid changes are combined into the la
 
 **Input source** and **Off / standby** ask for confirmation because they can disconnect the display. Keep access to the monitor's physical controls: a powered-down or switched-away monitor may stop responding to DDC and may need to be restored manually.
 
-Unknown feature codes and factory-reset commands are diagnostic-only. The app does not offer an arbitrary DDC command console, saved settings presets, or automatic restoration of all hardware values.
+Unknown feature codes and factory-reset commands are diagnostic-only. Version 0.1.2 does not offer an arbitrary DDC command console, saved settings presets, or automatic restoration of all hardware values.
+
+## Saved hardware presets — unreleased
+
+Presets require PIP/PBP Off and a verified reader for that state. An unavailable
+state stops the operation before any preset is applied.
+
+This work is in development and is **not included in v0.1.2**. It applies only
+to Samsung controls already verified for the selected unit.
+
+Save a preset after setting the monitor as desired. Saving reads the hardware
+again instead of copying potentially stale slider values. Applying a preset
+sets Picture Mode and Color Tone first, then the saved numeric controls, and
+checks the final readings. Only currently verified controls can be included;
+Eye Saver, input switching, and power are excluded.
+
+If an operation fails, the app stops. Settings already accepted by the monitor
+can remain changed; there is no automatic rollback. Check the reported failure
+and the OSD before resuming hardware control.
+
+Input, PIP/PBP, and sound-source formats have been decoded and tested offline.
+Single hardware reads matched HDMI 1 and PIP/PBP support with the mode off.
+A source-assignment read returned **invalid reply**, so testing stopped and
+testing stopped before any input or layout changes. The user confirmed a stable
+image, and verified picture controls were resumed. Audio was not queried. These controls remain unavailable. Transition verification needs a
+second connected, active source and a physical check of the monitor's behavior.
 
 ## Samsung G91SD controls
 

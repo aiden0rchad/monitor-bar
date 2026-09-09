@@ -18,7 +18,8 @@ struct RenderPanel {
             }
             snapshot = first
         }
-        let settings = CommandLine.arguments.dropFirst(2).first == "settings"
+        let presets = CommandLine.arguments.dropFirst(2).first == "presets"
+        let settings = presets || CommandLine.arguments.dropFirst(2).first == "settings"
         let selection: DisplayModeInfo?
         if CommandLine.arguments.count > 2 && !settings {
             guard let id = Int32(CommandLine.arguments[2]),
@@ -41,10 +42,22 @@ struct RenderPanel {
         if snapshot.display.isSamsungG91SD {
             preferences.set(true, forKey: Hardware.samsungEnableKey(snapshot.display))
             preferences.set(true, forKey: Hardware.samsungPictureModeEnableKey(snapshot.display))
+            preferences.set(true, forKey: Hardware.samsungPIPReadEnableKey(snapshot.display))
             // Eye Saver is read as a prerequisite, but its write timing is not yet verified.
             for feature in snapshot.features where [0x14, 0x2F].contains(feature.code) {
                 preferences.set(true, forKey: Hardware.samsungAdvancedEnableKey(snapshot.display, code: feature.code))
             }
+        }
+        if presets && snapshot.display.isSamsungG91SD {
+            let controls = snapshot.features.filter { HardwarePreset.orderedCodes.contains($0.code) && $0.isReadable }
+            let saved = try HardwarePreset(name: "Everyday", displayIdentity: snapshot.display.identity,
+                                          values: Dictionary(uniqueKeysWithValues: controls.map { ($0.code, $0.current) }),
+                                          maxima: Dictionary(uniqueKeysWithValues: controls.map { ($0.code, $0.maximum) }))
+            var eveningValues = saved.values
+            if let maximum = saved.maxima[0x10] { eveningValues[0x10] = min(15, maximum) }
+            let evening = try HardwarePreset(name: "Evening", displayIdentity: saved.displayIdentity,
+                                            values: eveningValues, maxima: saved.maxima)
+            try HardwarePresetLibrary.save([saved, evening], to: preferences)
         }
         let size = settings ? NSSize(width: 760, height: 620) : NSSize(width: 420, height: 560)
         for (name, scheme, appearance) in [
@@ -55,7 +68,7 @@ struct RenderPanel {
             store.launchAtLogin = false
             let view = ZStack {
                 Color(nsColor: .windowBackgroundColor)
-                if settings { MonitorSettingsView(store: store) }
+                if settings { MonitorSettingsView(store: store, previewPresets: presets) }
                 else { MonitorPanel(store: store, previewSelection: selection) }
             }
             .frame(width: size.width, height: size.height)
@@ -89,7 +102,7 @@ struct RenderPanel {
                 throw NSError(domain: "MonitorPanelPreview", code: 3,
                               userInfo: [NSLocalizedDescriptionKey: "Could not encode the preview PNG."])
             }
-            let output = outputDirectory.appendingPathComponent("monitor-\(settings ? "settings" : "panel")-\(name).png")
+            let output = outputDirectory.appendingPathComponent("monitor-\(presets ? "presets" : settings ? "settings" : "panel")-\(name).png")
             try png.write(to: output, options: .atomic)
             print(output.path)
             window.close()

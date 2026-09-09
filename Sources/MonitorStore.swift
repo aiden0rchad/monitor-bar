@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
     @Published var displays: [DisplayInfo] = []
     @Published var selectedID: UInt32 = 0
     @Published var features: [VCPFeature] = []
+    @Published private(set) var savedPresets: [HardwarePreset] = []
+    @Published private(set) var presetStorageError: String?
     @Published var capabilities = ""
     @Published var busy = false
     @Published private(set) var hardwareCommandsPaused = false
@@ -78,17 +80,29 @@ import UniformTypeIdentifiers
     private var previewedMode: DisplayModeInfo?
     private let writer: (DisplayInfo, VCPFeature, UInt16) -> (VCPFeature?, String)
     private let preferences: UserDefaults
+    private let presetReader: (DisplayInfo) -> MonitorProbe
+    private let presetDisplayConnected: (DisplayInfo) -> Bool
     private static let calibrationKeys: [UInt8: String] = [0x10: "brightnessLimit", 0x12: "contrastLimit"]
     private var writeTask: DispatchWorkItem?
     private var writeInFlight = false
     private var writeGeneration = 0
     private var resumeGeneration = 0
+    private var presetOperationID: UUID?
 
     init(snapshot: MonitorProbe? = nil,
          writer: @escaping (DisplayInfo, VCPFeature, UInt16) -> (VCPFeature?, String) = Hardware.write,
-         preferences: UserDefaults = Hardware.commandPreferences) {
+         preferences: UserDefaults = Hardware.commandPreferences,
+         presetReader: @escaping (DisplayInfo) -> MonitorProbe = Hardware.probeForPreset,
+         presetDisplayConnected: @escaping (DisplayInfo) -> Bool = { display in
+             CGDisplayIsActive(display.id) != 0 && CGDisplayVendorNumber(display.id) == display.vendor
+                 && CGDisplayModelNumber(display.id) == display.product && CGDisplaySerialNumber(display.id) == display.serial
+         }) {
         self.writer = writer
         self.preferences = preferences
+        self.presetReader = presetReader
+        self.presetDisplayConnected = presetDisplayConnected
+        do { savedPresets = try HardwarePresetLibrary.load(from: preferences) }
+        catch { presetStorageError = error.localizedDescription }
         if let snapshot {
             displays = [snapshot.display]
             selectedID = snapshot.display.id
@@ -163,6 +177,7 @@ import UniformTypeIdentifiers
         hardwareCommandsPaused = Hardware.commandsPaused(in: preferences)
         let result = hardwareCommandsPaused ? nil : result
         if result == nil {
+            if presetOperationID != nil { busy = false; presetOperationID = nil }
             writeGeneration += 1
             writeTask?.cancel(); writeTask = nil
             pendingValues.removeAll()
@@ -402,6 +417,192 @@ import UniformTypeIdentifiers
                     self.scheduleWrite()
                 }
             }
+        }
+    }
+
+    var canSaveHardwarePreset: Bool {
+        presetStorageError == nil && !busy && !writing && !pendingMode && !hardwareCommandsPaused
+            && selected.map { $0.isSamsungG91SD && Hardware.canUseSamsungPictureMode($0, preferences: preferences)
+                && Hardware.canUseSamsungPIPRead($0, preferences: preferences) } == true
+            && features.contains { $0.code == 0x2D && Hardware.isValidSamsungPictureMode($0) }
+            && !eyeSaverLocks(0x2D)
+    }
+
+    func canApplyHardwarePreset(_ preset: HardwarePreset) -> Bool {
+        canSaveHardwarePreset && preset.values[0x2D] != nil && selected?.identity == preset.displayIdentity
+            && savedPresets.contains(preset)
+            && preset.values.allSatisfy { code, value in
+                guard let feature = features.first(where: { $0.code == code }),
+                      feature.maximum == preset.maxima[code] else { return false }
+                return presetAllows(feature, value: value)
+            }
+    }
+
+    private func presetAllows(_ feature: VCPFeature, value: UInt16) -> Bool {
+        guard usesSamsungControls, HardwarePreset.orderedCodes.contains(feature.code),
+              feature.isReadable, !eyeSaverLocks(feature.code) else { return false }
+        if Hardware.samsungControlCodes.contains(feature.code) {
+            return feature.isSlider && value <= feature.maximum
+        }
+        return allowedChoices(for: feature).contains { $0.0 == value }
+            || (feature.code == 0x2F && isWritableSlider(feature) && value <= feature.maximum)
+    }
+
+    private func persistPresets(_ updated: [HardwarePreset]) {
+        guard presetStorageError == nil else { return }
+        do {
+            try HardwarePresetLibrary.save(updated, to: preferences)
+            savedPresets = updated
+        } catch { message = "Could not save presets: \(error.localizedDescription)" }
+    }
+
+    func renameHardwarePreset(_ preset: HardwarePreset, to name: String) {
+        guard !busy, !writing, presetStorageError == nil,
+              let index = savedPresets.firstIndex(where: { $0.id == preset.id }) else { return }
+        do {
+            var updated = savedPresets
+            updated[index] = try HardwarePreset(id: preset.id, name: name, displayIdentity: preset.displayIdentity,
+                                               values: preset.values, maxima: preset.maxima)
+            persistPresets(updated)
+        } catch { message = error.localizedDescription }
+    }
+
+    func deleteHardwarePreset(_ preset: HardwarePreset) {
+        guard !busy, !writing else { return }
+        persistPresets(savedPresets.filter { $0.id != preset.id })
+    }
+
+    private func presetOperationValid(_ display: DisplayInfo, generation: Int) -> Bool {
+        guard !stopHardwareIfPaused() else { return false }
+        guard generation == writeGeneration, selected?.id == display.id, selected?.identity == display.identity,
+              selected?.currentMode == display.currentMode, !pendingMode, presetDisplayConnected(display) else {
+            message = "Preset stopped because the display or connection changed. Review the monitor before trying again."
+            return false
+        }
+        return true
+    }
+
+    private func readForPreset(_ display: DisplayInfo, generation: Int) async -> MonitorProbe? {
+        guard presetOperationValid(display, generation: generation) else { return nil }
+        let reader = presetReader, connected = presetDisplayConnected
+        nonisolated(unsafe) let commandPreferences = preferences
+        let result: MonitorProbe? = await withCheckedContinuation { continuation in
+            Hardware.queue.async {
+                guard !Hardware.commandsPaused(in: commandPreferences), connected(display) else {
+                    continuation.resume(returning: nil); return
+                }
+                continuation.resume(returning: reader(display))
+            }
+        }
+        guard presetOperationValid(display, generation: generation) else { return nil }
+        guard let result, result.display.id == display.id, result.display.identity == display.identity,
+              result.display.currentMode == display.currentMode else {
+            message = "Preset stopped: fresh readings did not match the selected display."
+            return nil
+        }
+        applyProbe(result)
+        guard Hardware.canUseSamsungControls(display, preferences: preferences),
+              Hardware.canUseSamsungPictureMode(display, preferences: preferences),
+              Hardware.canUseSamsungPIPRead(display, preferences: preferences),
+              features.contains(where: { $0.code == 0xE2 && Hardware.isValidSamsungPIPFeature($0)
+                  && SamsungPIPState(rawValue: $0.current)?.isOn == false }),
+              features.contains(where: { $0.code == 0x2D && Hardware.isValidSamsungPictureMode($0) }),
+              !eyeSaverLocks(0x2D) else {
+            message = "Preset stopped: PIP/PBP must be Off, and Picture Mode and Eye Saver state must be available. Review the monitor’s OSD."
+            return nil
+        }
+        return result
+    }
+
+    func saveHardwarePreset(named name: String) {
+        guard canSaveHardwarePreset, let display = selected else { return }
+        guard let normalized = HardwarePreset.normalizedName(name) else {
+            message = HardwarePreset.ValidationError.invalidName.localizedDescription; return
+        }
+        busy = true
+        let operation = UUID()
+        presetOperationID = operation
+        let generation = writeGeneration
+        message = "Reading current settings for \(normalized)…"
+        Task { @MainActor in
+            defer {
+                if presetOperationID == operation { presetOperationID = nil; finishOperation() }
+            }
+            guard let snapshot = await readForPreset(display, generation: generation) else { return }
+            let captured = snapshot.features.filter { presetAllows($0, value: $0.current) }
+            guard captured.contains(where: { $0.code == 0x2D }) else {
+                message = "Preset not saved: Picture Mode is no longer available."; return
+            }
+            do {
+                let preset = try HardwarePreset(name: normalized, displayIdentity: display.identity,
+                    values: Dictionary(uniqueKeysWithValues: captured.map { ($0.code, $0.current) }),
+                    maxima: Dictionary(uniqueKeysWithValues: captured.map { ($0.code, $0.maximum) }))
+                persistPresets(savedPresets + [preset])
+                if savedPresets.contains(preset) { message = "Saved \(normalized) from fresh monitor readings." }
+            } catch { message = "Could not save preset: \(error.localizedDescription)" }
+        }
+    }
+
+    func applyHardwarePreset(_ preset: HardwarePreset) {
+        guard canApplyHardwarePreset(preset), let display = selected else { return }
+        busy = true
+        let operation = UUID()
+        presetOperationID = operation
+        let generation = writeGeneration
+        message = "Applying \(preset.name)…"
+        Task { @MainActor in
+            defer {
+                if presetOperationID == operation { presetOperationID = nil; finishOperation() }
+            }
+            guard await readForPreset(display, generation: generation) != nil else { return }
+            // Validate every saved control before the first write, then again after mode changes.
+            @MainActor func allAvailable() -> Bool {
+                preset.values.allSatisfy { code, value in
+                    guard let feature = features.first(where: { $0.code == code }),
+                          feature.maximum == preset.maxima[code] else { return false }
+                    return presetAllows(feature, value: value)
+                }
+            }
+            guard allAvailable() else {
+                message = "Preset not applied: a saved control or range is unavailable on this connection."
+                return
+            }
+            for code in preset.orderedCodes {
+                guard presetOperationValid(display, generation: generation), allAvailable(),
+                      let live = features.first(where: { $0.code == code }), let value = preset.values[code] else {
+                    if !hardwareCommandsPaused { message = "Preset stopped: a control or connection changed. Some settings may already have changed." }
+                    return
+                }
+                if live.current == value { continue }
+                let writer = writer, connected = presetDisplayConnected
+                nonisolated(unsafe) let commandPreferences = preferences
+                let (readback, status): (VCPFeature?, String) = await withCheckedContinuation { continuation in
+                    Hardware.queue.async {
+                        guard !Hardware.commandsPaused(in: commandPreferences), connected(display) else {
+                            continuation.resume(returning: (nil, "Connection changed or hardware commands paused.")); return
+                        }
+                        continuation.resume(returning: writer(display, live, value))
+                    }
+                }
+                guard presetOperationValid(display, generation: generation) else { return }
+                guard let readback, readback.isReadable, readback.current == value,
+                      readback.maximum == live.maximum, readback.type == live.type else {
+                    if let readback, let index = features.firstIndex(where: { $0.code == code }) { features[index] = readback }
+                    message = "Preset stopped: \(status) Some settings may already have changed."
+                    return
+                }
+                if let index = features.firstIndex(where: { $0.code == code }) { features[index] = readback }
+                probe?.features = features
+                if [0x2D, 0x14].contains(code), await readForPreset(display, generation: generation) == nil { return }
+            }
+            guard await readForPreset(display, generation: generation) != nil else { return }
+            guard allAvailable(), preset.values.allSatisfy({ code, value in
+                features.contains { $0.code == code && $0.current == value }
+            }) else {
+                message = "Preset was not fully confirmed. Review the refreshed values; no commands were retried."
+                return
+            }
+            message = "\(preset.name) applied and confirmed by the monitor."
         }
     }
 

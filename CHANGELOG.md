@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Add saved hardware presets for individually verified Samsung controls. Save
+  fresh hardware readings, apply Picture Mode and Color Tone before numeric
+  values, and verify the final result. Stop on failure without automatic rollback.
+  Eye Saver, input, and power controls are excluded.
+- Require a separately verified PIP/PBP reader for presets. Check that PIP/PBP
+  is Off before reading a preset and before writes on enabled units; leave
+  ordinary refresh unchanged.
+- Decode Samsung input, PIP/PBP, and sound-source formats with offline tests that
+  reject unknown and reserved values. Single reads matched HDMI 1 and PIP/PBP
+  support while off. An invalid source-assignment reply stopped testing before
+  audio queries or writes; it is not classified as an unsupported-feature reply.
+  Input, split-screen, and audio-source writes remain unverified and disabled.
+
 ## 0.1.2 — 2026-09-09
 
 A smaller popup for everyday adjustments, a separate settings window, and

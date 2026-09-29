@@ -111,6 +111,19 @@ Picture Mode changes the monitor's hardware preset and can also change brightnes
 
 If brightness is unavailable in the monitor's own menu, check **Save Power** first. Turning it off restored brightness on the tested unit. Firmware 1003.2 did not establish a general fix for HDMI disconnections. See [Samsung troubleshooting](https://aiden0rchad.github.io/monitor-bar/troubleshooting/#samsung-g91sd-hardware-controls).
 
+## LG 34UM95
+
+On our tested LG setup, Monitor Bar handles **resolution and refresh rate**;
+brightness and contrast stay on the monitor's physical controls. Native
+**3440 × 1440 at 30 Hz** looked clear in short tests over direct HDMI and a Dell
+dock's DisplayPort output. **2560 × 1080 at 60 Hz** is the smoother fallback.
+Native 50 Hz over HDMI and 60 Hz through the dock produced artifacts or a black
+screen. Hardware brightness queries failed on every tested route, including an
+independent tool check, so we left hardware controls paused.
+
+These are results from one setup, not a blanket limit for the model.
+[Read the connection results and limits](https://aiden0rchad.github.io/monitor-bar/troubleshooting/#lg-34um95-tested-modes-and-hardware-control-limits).
+
 ## A note about brightness and contrast
 
 This project started with a generic USB-C display that reported a normal 0–100 brightness range. In practice, moving through that range made the screen get brighter, then darker, then brighter again. The number returned by the monitor was correct; the picture wasn't behaving like that number suggested.

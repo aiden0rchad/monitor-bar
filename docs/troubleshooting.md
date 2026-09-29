@@ -120,6 +120,65 @@ Open **Resolution** and try an available HiDPI mode. Verify both the workspace d
 
 If Monitor Bar shows two native sizes, the panel's EDID and macOS disagree. Read the [HiDPI guide]({{ '/hidpi/' | relative_url }}#when-the-monitor-and-macos-disagree) and compare both available previews. Also check the monitor's physical aspect/scaling menu. Monitor Bar does not override firmware scaling or create missing resolutions.
 
+## LG 34UM95: tested modes and hardware-control limits
+
+Testing on an M3 Max Mac found a usable native-resolution option, but no working
+hardware-control connection. The practical setup is to use Monitor Bar for
+**resolution and refresh rate**, and the LG's physical menu for **brightness,
+contrast, and other picture controls**. Hardware commands remain paused on the
+tested Mac. Investigation is closed for this setup unless new hardware or
+connection evidence becomes available.
+
+### Resolution and refresh rate
+
+| Connection | Mode (standard rendering) | Observed result |
+| --- | --- | --- |
+| Direct HDMI | 2560 × 1080 at 60 Hz | Working fallback |
+| Direct HDMI | 3440 × 1440 at 30 Hz | Clear during a 15-second preview |
+| Direct HDMI | 3440 × 1440 at 50 Hz | Garbled/artifacting |
+| Dell dock → DisplayPort | 2560 × 1080 at 60 Hz | Working fallback |
+| Dell dock → DisplayPort | 3440 × 1440 at 30 Hz | Reported clear during a 45-second preview; subsequently selected for normal use |
+| Dell dock → DisplayPort | 3440 × 1440 at 60 Hz | Initially clear, then artifacts, then black screen |
+
+The timed previews restored 2560 × 1080 at 60 Hz, with mode readback checked.
+These were short attended tests, not a long-term stability certification.
+Native 30 Hz offers more detail with less fluid motion; 2560 × 1080 at 60 Hz
+remains the smoother fallback. Mode selection is kept for the current login
+session; reconnecting can change the active mode.
+
+LG specifies native **3440 × 1440 at 50 Hz over HDMI**, or **60 Hz over
+DisplayPort/Thunderbolt** ([LG specifications](https://www.lg.com/de/monitore/ultrawide/34um95/)).
+The tested monitor's HDMI EDID has valid checksums and advertises both native
+50 Hz and 30 Hz timings. An advertised mode does not guarantee a correct picture
+on a particular setup. HiDPI changes rendering, not video-link reliability.
+
+PBP was **Off** and, as confirmed by the user, **DisplayPort 1.2 was enabled**
+during the DisplayPort comparison. The initial menu photo showed it disabled;
+that earlier photo does not describe the later test. No factory reset, firmware
+change, custom timing, or EDID override was applied.
+
+### Hardware controls
+
+| Connection | Brightness-query result |
+| --- | --- |
+| Mac → dock → DisplayPort, first socket | Transport error |
+| Mac → dock → DisplayPort, second socket | Transport error |
+| Mac → dock → HDMI | Transport error |
+| Mac → HDMI directly | I/O completes, but the reply is invalid |
+
+A brightness read at the working native 30 Hz mode still failed through the
+dock. An independent `m1ddc` query on direct HDMI also returned malformed bytes;
+its printed number was not a validated brightness reading. No brightness or
+other picture-setting writes were sent during these comparisons. Software
+dimming was not used as a substitute.
+
+These results do **not** establish that every 34UM95 lacks DDC/CI—LG lists it in
+its [specification](https://www.lg.com/content/dam/channel/wcms/ca_en/support/products/documents/34UM95_Spec_Sheet_ENG.pdf).
+They establish that hardware controls are unverified on these tested paths.
+A direct USB-C-to-DisplayPort connection was unavailable and remains untested.
+The cause has not been isolated to the monitor, cable, dock, or macOS, and this
+is not a claim that all Apple Silicon Macs are incompatible.
+
 ## Multiple monitors and identity
 
 Hardware control requires a unique match between macOS and the DDC service using vendor, product, and serial identity. If multiple services share that identity, hardware control is withheld to avoid sending a command to the wrong screen. Identical generic displays with missing or duplicate serials can trigger this limitation.
@@ -148,3 +207,23 @@ For an [issue report]({{ site.repository_url }}/issues), include:
 - Whether the issue persists with other DDC utilities closed and a direct connection.
 
 Share only the relevant redacted fields. A monitor's advertised capabilities cannot establish its retail brand, physical connector inventory, measured HDR performance, or undocumented proprietary features.
+
+## Display works through a dock, but hardware controls do not
+
+A readable EDID and working video do not establish that DDC/CI commands can
+reach the monitor. If all control reads return transport errors, check whether
+the monitor has DDC/CI disabled, then compare with a direct Mac-to-monitor
+connection. Keep the dock connected for USB devices if needed; bypass its video
+output for this comparison.
+
+A read-only check of an LG 34UM95 through a Dell dock identified the display and
+its modes, but capabilities and all 16 attempted feature reads returned transport
+errors. No setting writes were sent. A direct-HDMI follow-up completed I/O transactions but returned malformed
+capability and feature replies. Hardware controls on both tested routes remain
+unverified; neither result establishes that the LG lacks DDC/CI. LG lists DDC/CI in its
+[34UM95 specifications](https://www.lg.com/content/dam/channel/wcms/au/support/products/documents/Monitors_Tech_Specs_34UM95_APPROVED_17_Feb_14.pdf).
+
+Some dock video paths do not relay DDC reliably on macOS. See the
+[BetterDisplay developer's explanation](https://github.com/waydabber/BetterDisplay/discussions/1692)
+for the distinction between monitor support and dock passthrough. A workaround
+for one dock model or port is not a compatibility guarantee for another.

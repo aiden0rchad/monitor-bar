@@ -50,6 +50,14 @@ Resolution changes have a 15-second preview. Click **Keep** to retain the mode f
 
 Monitor Bar has no account, tracking, network service, or automatic updater. Downloads and updates are available on [GitHub Releases]({{ site.repository_url }}/releases). The [MIT license]({{ site.repository_url }}/blob/main/LICENSE) permits use and modification without charge.
 
+## LG 34UM95 compatibility note
+
+The tested LG 34UM95 works with Monitor Bar's resolution and refresh-rate
+selection. Native **3440 × 1440 at 30 Hz** passed short visual checks; higher
+native refresh rates produced corruption. Hardware brightness and contrast
+remain unavailable on the tested connections, so use the monitor's physical
+menu for those controls. [See the tested modes, connections, and limitations]({{ '/troubleshooting/' | relative_url }}#lg-34um95-tested-modes-and-hardware-control-limits).
+
 ## Start here
 
 - [Install and open the app]({{ '/installation/' | relative_url }}).
